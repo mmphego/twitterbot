@@ -23,7 +23,9 @@ import os
 import sys
 import time
 import random
+import threading
 
+semaphore = threading.Semaphore(8)
 
 class TwitterBot:
 
@@ -61,7 +63,8 @@ class TwitterBot:
         wait_time = random.randint(min_time, max_time)
 
         if wait_time > 0:
-            print("Choosing time between %d and %d - waiting %d seconds before action" % (min_time, max_time, wait_time))
+            print("Choosing time between %d and %d - waiting %d seconds before action" % (
+                min_time, max_time, wait_time))
             time.sleep(wait_time)
 
         return wait_time
@@ -95,7 +98,7 @@ class TwitterBot:
         required_parameters = ["OAUTH_TOKEN", "OAUTH_SECRET", "CONSUMER_KEY",
                                "CONSUMER_SECRET", "TWITTER_HANDLE",
                                "ALREADY_FOLLOWED_FILE",
-                               "FOLLOWERS_FILE", "FOLLOWS_FILE"]
+                               "FOLLOWERS_FILE", "NON_FOLLOWERS_FILE", "FOLLOWS_FILE"]
 
         missing_parameters = []
 
@@ -109,10 +112,10 @@ class TwitterBot:
             raise Exception("Please edit %s to include the following parameters: %s.\n\n"
                             "The bot cannot run unless these parameters are specified."
                             % (config_file, ", ".join(missing_parameters)))
-
         # make sure all of the sync files exist locally
         for sync_file in [self.BOT_CONFIG["ALREADY_FOLLOWED_FILE"],
                           self.BOT_CONFIG["FOLLOWS_FILE"],
+                          self.BOT_CONFIG["NON_FOLLOWERS_FILE"],
                           self.BOT_CONFIG["FOLLOWERS_FILE"]]:
             if not os.path.isfile(sync_file):
                 with open(sync_file, "w") as out_file:
@@ -237,9 +240,7 @@ class TwitterBot:
                 # don't favorite your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                
                 self.wait_on_action()
-                
                 result = self.TWITTER_CONNECTION.favorites.create(_id=tweet["id"])
                 print("Favorited: %s" % (result["text"].encode("utf-8")), file=sys.stdout)
 
@@ -266,9 +267,7 @@ class TwitterBot:
                 # don't retweet your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                
                 self.wait_on_action()
-                
                 result = self.TWITTER_CONNECTION.statuses.retweet(id=tweet["id"])
                 print("Retweeted: %s" % (result["text"].encode("utf-8")), file=sys.stdout)
 
@@ -408,19 +407,67 @@ class TwitterBot:
                 self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
                 print("Unfollowed %d" % (user_id), file=sys.stdout)
 
-    def auto_unfollow_all_followers(self,count=None):
+
+    def unfollow_users(self, users=[]):
         """
-            Unfollows everyone that you are following(except those who you have specified not to)
+            Unfollows everyone
         """
+        try:
+            assert users
+            unfollow_users = users
+        except:
+            with open(self.BOT_CONFIG['NON_FOLLOWERS_FILE']) as in_file:
+                unfollow_users = [l.strip() for l in in_file.readlines() if l.strip()]
+
+        def unfollow(user_id):
+            with semaphore:
+                subquery = self.TWITTER_CONNECTION.users.lookup(user_id=user_id)
+                for user in subquery:
+                    print ("Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"]))
+                time.sleep(5)
+                unfollowed = self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
+
+        for user_id in unfollow_users:
+            threading.Thread(target=unfollow, args=(user_id, )).start()
+
+
+    def find_nonfollowers(self):
+        """
+            find everyone who hasn't followed you back.
+        """
+
         following = self.get_follows_list()
+        followers = self.get_followers_list()
 
-        for user_id in following:
-            if user_id not in self.BOT_CONFIG["USERS_KEEP_FOLLOWING"]:
+        not_following_back = list(following - followers)
+        non_followers = []
+        self.non_followers = []
+        for n in range(0, len(not_following_back), 99):
+            ids = not_following_back[n: n + 99]
+            subquery = self.TWITTER_CONNECTION.users.lookup(user_id=ids)
+            for user in subquery:
+                self.non_followers.append("@%s %s" % (user["screen_name"], user["id"]))
+                non_followers.append(" [%s] @%s [id: %s]" % (
+                    "*" if user["verified"] else " ", user["screen_name"], user["id"]))
 
-                self.wait_on_action()
+        with open(self.BOT_CONFIG["NON_FOLLOWERS_FILE"], 'w') as out_file:
+            for val in non_followers:
+                out_file.write(str(val) + '\n')
 
-                self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
-                print("Unfollowed %d" % (user_id), file=sys.stdout)
+
+    # def auto_unfollow_all_followers(self,count=None):
+    #     """
+    #         Unfollows everyone that you are following(except those who you have specified not to)
+    #     """
+    #     following = self.get_follows_list()
+
+    #     for user_id in following:
+    #         if user_id not in self.BOT_CONFIG["USERS_KEEP_FOLLOWING"]:
+
+    #             self.wait_on_action()
+
+    #             self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
+    #             print("Unfollowed %d" % (user_id), file=sys.stdout)
 
     def auto_mute_following(self):
         """
@@ -428,7 +475,8 @@ class TwitterBot:
         """
 
         following = self.get_follows_list()
-        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
+        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
+            screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
 
         not_muted = following - muted
 
@@ -442,7 +490,8 @@ class TwitterBot:
             Unmutes everyone that you have muted.
         """
 
-        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
+        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
+            screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
 
         for user_id in muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_MUTED"]:
@@ -455,19 +504,19 @@ class TwitterBot:
         """
 
         return self.TWITTER_CONNECTION.statuses.update(status=message)
-    
+
     def auto_add_to_list(self, phrase, list_slug, count=100, result_type="recent"):
         """
             Add users to list slug that are tweeting phrase.
         """
-        
+
         result = self.search_tweets(phrase, count, result_type)
-        
+
         for tweet in result["statuses"]:
             try:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                
+
                 result = self.TWITTER_CONNECTION.lists.members.create(owner_screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
                                                                       slug=list_slug,
                                                                       screen_name=tweet["user"]["screen_name"])
