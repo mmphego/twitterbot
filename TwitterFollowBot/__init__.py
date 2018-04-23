@@ -18,16 +18,30 @@ You should have received a copy of the GNU General Public License along with
 the Twitter Bot library. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import print_function
-from twitter import Twitter, OAuth, TwitterHTTPError
 import os
 import sys
 import time
 import random
 import threading
+import logging
 
-semaphore = threading.Semaphore(8)
+from twitter import Twitter
+from twitter import OAuth
 
-class TwitterBot:
+log_format = '%(asctime)s - %(name)s - %(levelname)s : %(lineno)d - %(message)s'
+
+# This class could be imported from a utility module
+class loggingClass(object):
+    @property
+    def logger(self):
+        super(loggingClass, self).__init__()
+        name = '.'.join(
+            [os.path.basename(sys.argv[0]), self.__class__.__name__])
+        logging.basicConfig(format=log_format, level=logging.INFO)
+        return logging.getLogger(name)
+
+
+class TwitterBot(loggingClass):
 
     """
         Bot that automates several actions on Twitter, such as following users
@@ -37,44 +51,14 @@ class TwitterBot:
     def __init__(self, config_file="config.txt"):
         # this variable contains the configuration for the bot
         self.BOT_CONFIG = {}
-
         # this variable contains the authorized connection to the Twitter API
         self.TWITTER_CONNECTION = None
-
         self.bot_setup(config_file)
-
-        # Used for random timers
-        random.seed()
-
-    def wait_on_action(self):
-        min_time = 0
-        max_time = 0
-        if "FOLLOW_BACKOFF_MIN_SECONDS" in self.BOT_CONFIG:
-            min_time = int(self.BOT_CONFIG["FOLLOW_BACKOFF_MIN_SECONDS"])
-
-        if "FOLLOW_BACKOFF_MAX_SECONDS" in self.BOT_CONFIG:
-            max_time = int(self.BOT_CONFIG["FOLLOW_BACKOFF_MAX_SECONDS"])
-
-        if min_time > max_time:
-            temp = min_time
-            min_time = max_time
-            max_time = temp
-
-        wait_time = random.randint(min_time, max_time)
-
-        if wait_time > 0:
-            print("Choosing time between %d and %d - waiting %d seconds before action" % (
-                min_time, max_time, wait_time))
-            time.sleep(wait_time)
-
-        return wait_time
 
     def bot_setup(self, config_file="config.txt"):
         """
             Reads in the bot configuration file and sets up the bot.
-
             Defaults to config.txt if no configuration file is specified.
-
             If you want to modify the bot configuration, edit your config.txt.
         """
 
@@ -95,16 +79,14 @@ class TwitterBot:
                     self.BOT_CONFIG[parameter] = value
 
         # make sure that the config file specifies all required parameters
-        required_parameters = ["OAUTH_TOKEN", "OAUTH_SECRET", "CONSUMER_KEY",
-                               "CONSUMER_SECRET", "TWITTER_HANDLE",
-                               "ALREADY_FOLLOWED_FILE",
-                               "FOLLOWERS_FILE", "NON_FOLLOWERS_FILE", "FOLLOWS_FILE"]
+        required_parameters = ["OAUTH_TOKEN", "OAUTH_SECRET", "CONSUMER_KEY", "CONSUMER_SECRET",
+                               "TWITTER_HANDLE", "ALREADY_FOLLOWED_FILE", "FOLLOWERS_FILE",
+                               "NON_FOLLOWERS_FILE", "FOLLOWS_FILE"]
 
         missing_parameters = []
 
         for required_parameter in required_parameters:
-            if (required_parameter not in self.BOT_CONFIG or
-                    self.BOT_CONFIG[required_parameter] == ""):
+            if (required_parameter not in self.BOT_CONFIG or self.BOT_CONFIG[required_parameter] == ""):
                 missing_parameters.append(required_parameter)
 
         if len(missing_parameters) > 0:
@@ -125,9 +107,9 @@ class TwitterBot:
         # if they are old
         if (time.time() - os.path.getmtime(self.BOT_CONFIG["FOLLOWS_FILE"]) > 86400 or
                 time.time() - os.path.getmtime(self.BOT_CONFIG["FOLLOWERS_FILE"]) > 86400):
-            print("Warning: Your Twitter follower sync files are more than a day old. "
+            self.logger.info("Warning: Your Twitter follower sync files are more than a day old. "
                   "It is highly recommended that you sync them by calling sync_follows() "
-                  "before continuing.", file=sys.stderr)
+                  "before continuing.")
 
         # create an authorized connection to the Twitter API
         self.TWITTER_CONNECTION = Twitter(auth=OAuth(self.BOT_CONFIG["OAUTH_TOKEN"],
@@ -135,6 +117,7 @@ class TwitterBot:
                                                      self.BOT_CONFIG["CONSUMER_KEY"],
                                                      self.BOT_CONFIG["CONSUMER_SECRET"]))
 
+    @property
     def sync_follows(self):
         """
             Syncs the user's followers and follows locally so it isn't necessary
@@ -147,8 +130,9 @@ class TwitterBot:
             bot to get rate limited by the Twitter API.
         """
 
-        # sync the user's followers (accounts following the user)
-        followers_status = self.TWITTER_CONNECTION.followers.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
+        self.logger.info("Sync the user's followers (accounts following the user).")
+        followers_status = self.TWITTER_CONNECTION.followers.ids(
+            screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
         followers = set(followers_status["ids"])
         next_cursor = followers_status["next_cursor"]
 
@@ -157,8 +141,8 @@ class TwitterBot:
                 out_file.write("%s\n" % (follower))
 
         while next_cursor != 0:
-            followers_status = self.TWITTER_CONNECTION.followers.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
-                                                                     cursor=next_cursor)
+            followers_status = self.TWITTER_CONNECTION.followers.ids(
+                screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor)
             followers = set(followers_status["ids"])
             next_cursor = followers_status["next_cursor"]
 
@@ -167,7 +151,8 @@ class TwitterBot:
                     out_file.write("%s\n" % (follower))
 
         # sync the user's follows (accounts the user is following)
-        following_status = self.TWITTER_CONNECTION.friends.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
+        following_status = self.TWITTER_CONNECTION.friends.ids(
+            screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
         following = set(following_status["ids"])
         next_cursor = following_status["next_cursor"]
 
@@ -176,116 +161,160 @@ class TwitterBot:
                 out_file.write("%s\n" % (follow))
 
         while next_cursor != 0:
-            following_status = self.TWITTER_CONNECTION.friends.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
-                                                                   cursor=next_cursor)
+            following_status = self.TWITTER_CONNECTION.friends.ids(
+                screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor)
             following = set(following_status["ids"])
             next_cursor = following_status["next_cursor"]
 
             with open(self.BOT_CONFIG["FOLLOWS_FILE"], "a") as out_file:
                 for follow in following:
                     out_file.write("%s\n" % (follow))
+        self.logger.info('Done syncing data with Twitter')
 
+    def follow_user(self, user_id, _follow=False):
+        '''
+        Allows the user to follow the user specified in the ID parameter.
+        Params: int
+            The ID of the user to follow.
+        Returns: None
+        '''
+        try:
+            self.TWITTER_CONNECTION.friendships.create(user_id=user_id, follow=_follow)
+            time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+            subquery = self.username_lookup(user_id)
+            for user in subquery:
+                self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
+        except Exception as api_error:
+            self.logger.error("Error: %s" % str(api_error))
+
+    def unfollow_user(self, user_id):
+        '''
+        Allows the user to unfollow the user specified in the ID parameter.
+        Params: int
+            The ID of the user to follow.
+        Returns: None
+        '''
+        try:
+            self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
+            time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+            subquery = self.username_lookup(user_id)
+            for user in subquery:
+                self.logger.info("Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"]))
+        except Exception as api_error:
+            self.logger.error("Error: %s" % str(api_error))
+
+    def username_lookup(self, ids):
+        """
+        Find username by id
+        Params: int
+            user id
+        Return: dict
+            Dict with Users information
+        """
+        return self.TWITTER_CONNECTION.users.lookup(user_id=ids)
+    # ----------------------------------
     def get_do_not_follow_list(self):
         """
             Returns the set of users the bot has already followed in the past.
         """
-
         dnf_list = []
         with open(self.BOT_CONFIG["ALREADY_FOLLOWED_FILE"], "r") as in_file:
             for line in in_file:
                 dnf_list.append(int(line))
-
         return set(dnf_list)
 
     def get_followers_list(self):
         """
             Returns the set of users that are currently following the user.
         """
-
         followers_list = []
         with open(self.BOT_CONFIG["FOLLOWERS_FILE"], "r") as in_file:
             for line in in_file:
                 followers_list.append(int(line))
-
         return set(followers_list)
 
     def get_follows_list(self):
         """
             Returns the set of users that the user is currently following.
         """
-
         follows_list = []
         with open(self.BOT_CONFIG["FOLLOWS_FILE"], "r") as in_file:
             for line in in_file:
                 follows_list.append(int(line))
-
         return set(follows_list)
 
+    def get_all_nonfollowers(self, auto_sync=False):
+        """
+        find everyone who hasn't followed you back.
+        """
+        if auto_sync:
+            self.sync_follows
+
+        following = self.get_follows_list()
+        followers = self.get_followers_list()
+
+        not_following_back = list(following - followers)
+        non_followers = []
+        for n in range(0, len(not_following_back), 99):
+            ids = not_following_back[n: n + 99]
+            subquery = self.username_lookup(ids)
+            for user in subquery:
+                non_followers.append("[%s] @%s [id: %s]" % (
+                    "*" if user["verified"] else " ", user["screen_name"], user["id"]))
+
+        with open(self.BOT_CONFIG["NON_FOLLOWERS_FILE"], 'w') as out_file:
+            for val in non_followers:
+                out_file.write(str(val) + '\n')
+    # ----------------------------------
     def search_tweets(self, phrase, count=100, result_type="recent"):
         """
-            Returns a list of tweets matching a phrase (hashtag, word, etc.).
+        Returns a list of tweets matching a phrase (hashtag, word, etc.).
         """
-
         return self.TWITTER_CONNECTION.search.tweets(q=phrase, result_type=result_type, count=count)
-
-    def auto_fav(self, phrase, count=100, result_type="recent"):
+    # ----------------------------------
+    def auto_fav_by_hashtag(self, phrase, count=100, result_type="recent"):
         """
-            Favorites tweets that match a phrase (hashtag, word, etc.).
+            Favourites tweets that match a phrase (hashtag, word, etc.).
         """
-
         result = self.search_tweets(phrase, count, result_type)
-
         for tweet in result["statuses"]:
             try:
                 # don't favorite your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                self.wait_on_action()
+                time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
                 result = self.TWITTER_CONNECTION.favorites.create(_id=tweet["id"])
-                print("Favorited: %s" % (result["text"].encode("utf-8")), file=sys.stdout)
-
+                self.logger.info("Favourite: %s" % (result["text"].encode("utf-8")))
             # when you have already favorited a tweet, this error is thrown
-            except TwitterHTTPError as api_error:
+            except Exception as api_error:
                 # quit on rate limit errors
-                if "rate limit" in str(api_error).lower():
-                    print("You have been rate limited. "
-                          "Wait a while before running the bot again.", file=sys.stderr)
-                    return
+                self.logger.error('%s' % str(api_error))
 
-                if "you have already favorited this status" not in str(api_error).lower():
-                    print("Error: %s" % (str(api_error)), file=sys.stderr)
-
-    def auto_rt(self, phrase, count=100, result_type="recent"):
+    def auto_rt_by_hashtag(self, phrase, count=100, result_type="recent"):
         """
             Retweets tweets that match a phrase (hashtag, word, etc.).
         """
 
         result = self.search_tweets(phrase, count, result_type)
-
         for tweet in result["statuses"]:
             try:
                 # don't retweet your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                self.wait_on_action()
+                time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
                 result = self.TWITTER_CONNECTION.statuses.retweet(id=tweet["id"])
-                print("Retweeted: %s" % (result["text"].encode("utf-8")), file=sys.stdout)
-
+                self.logger.info("Retweeted: %s" % (result["text"].encode("utf-8")))
             # when you have already retweeted a tweet, this error is thrown
-            except TwitterHTTPError as api_error:
+            except Exception as api_error:
                 # quit on rate limit errors
-                if "rate limit" in str(api_error).lower():
-                    print("You have been rate limited. "
-                          "Wait a while before running the bot again.", file=sys.stderr)
-                    return
+                self.logger.error("Error: %s" % (str(api_error)))
 
-                print("Error: %s" % (str(api_error)), file=sys.stderr)
-
-    def auto_follow(self, phrase, count=100, result_type="recent"):
+    def auto_follow_by_hashtag(self, phrase, count=100, auto_sync=False,result_type="recent"):
         """
             Follows anyone who tweets about a phrase (hashtag, word, etc.).
         """
-
+        if auto_sync:
+            self.sync_follows
         result = self.search_tweets(phrase, count, result_type)
         following = self.get_follows_list()
         do_not_follow = self.get_do_not_follow_list()
@@ -296,91 +325,49 @@ class TwitterBot:
                         tweet["user"]["id"] not in following and
                         tweet["user"]["id"] not in do_not_follow):
 
-                    self.wait_on_action()
-
-                    self.TWITTER_CONNECTION.friendships.create(user_id=tweet["user"]["id"], follow=False)
+                    self.follow_user(tweet["user"]["id"])
                     following.update(set([tweet["user"]["id"]]))
-
-                    print("Followed %s" %
-                          (tweet["user"]["screen_name"]), file=sys.stdout)
-
-            except TwitterHTTPError as api_error:
+            except Exception as api_error:
                 # quit on rate limit errors
-                if "unable to follow more people at this time" in str(api_error).lower():
-                    print("You are unable to follow more people at this time. "
-                          "Wait a while before running the bot again or gain "
-                          "more followers.", file=sys.stderr)
-                    return
+                self.logger.error("Error: %s" % (str(api_error)))
 
-                # don't print "already requested to follow" errors - they're
-                # frequent
-                if "already requested to follow" not in str(api_error).lower():
-                    print("Error: %s" % (str(api_error)), file=sys.stderr)
-
-    def auto_follow_followers(self,count=None):
+    def auto_follow_followers(self, count=None, auto_sync=False):
         """
             Follows back everyone who's followed you.
         """
-
+        if auto_sync:
+            self.sync_follows
         following = self.get_follows_list()
         followers = self.get_followers_list()
 
         not_following_back = followers - following
         not_following_back = list(not_following_back)[:count]
+
         for user_id in not_following_back:
-            try:
-                self.wait_on_action()
-
-                self.TWITTER_CONNECTION.friendships.create(user_id=user_id, follow=False)
-            except TwitterHTTPError as api_error:
-                # quit on rate limit errors
-                if "unable to follow more people at this time" in str(api_error).lower():
-                    print("You are unable to follow more people at this time. "
-                          "Wait a while before running the bot again or gain "
-                          "more followers.", file=sys.stderr)
-                    return
-
-                # don't print "already requested to follow" errors - they're frequent
-                if "already requested to follow" not in str(api_error).lower():
-                    print("Error: %s" % (str(api_error)), file=sys.stderr)
+            subquery = self.username_lookup(user_id)
+            for user in subquery:
+                if not user['protected']:
+                    self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
+                    followed = self.follow_user(user_id, True)
+                else:
+                    self.logger.info("User @%s Protected and will not follow" % user["screen_name"])
 
     def auto_follow_followers_of_user(self, user_twitter_handle, count=100):
         """
             Follows the followers of a specified user.
         """
-
-        following = self.get_follows_list()
-        followers_of_user = set(self.TWITTER_CONNECTION.followers.ids(screen_name=user_twitter_handle)["ids"][:count])
-        do_not_follow = self.get_do_not_follow_list()
+        followers_of_user = set(self.TWITTER_CONNECTION.followers.ids(
+            screen_name=user_twitter_handle)["ids"][:count])
 
         for user_id in followers_of_user:
-            try:
-                if (user_id not in following and
-                        user_id not in do_not_follow):
+            self.follow_user(user_id, True)
 
-                    self.wait_on_action()
-
-                    self.TWITTER_CONNECTION.friendships.create(user_id=user_id, follow=False)
-                    print("Followed %s" % user_id, file=sys.stdout)
-
-            except TwitterHTTPError as api_error:
-                # quit on rate limit errors
-                if "unable to follow more people at this time" in str(api_error).lower():
-                    print("You are unable to follow more people at this time. "
-                          "Wait a while before running the bot again or gain "
-                          "more followers.", file=sys.stderr)
-                    return
-
-                # don't print "already requested to follow" errors - they're
-                # frequent
-                if "already requested to follow" not in str(api_error).lower():
-                    print("Error: %s" % (str(api_error)), file=sys.stderr)
-
-    def auto_unfollow_nonfollowers(self,count=None):
+    def auto_unfollow_nonfollowers(self, count=None, auto_sync=False):
         """
             Unfollows everyone who hasn't followed you back.
         """
-
+        if auto_sync:
+            self.sync_follows
         following = self.get_follows_list()
         followers = self.get_followers_list()
 
@@ -401,79 +388,12 @@ class TwitterBot:
 
         for user_id in not_following_back:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_FOLLOWING"]:
-
-                self.wait_on_action()
-
-                self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
-                print("Unfollowed %d" % (user_id), file=sys.stdout)
-
-
-    def unfollow_users(self, users=[]):
-        """
-            Unfollows everyone
-        """
-        try:
-            assert users
-            unfollow_users = users
-        except:
-            with open(self.BOT_CONFIG['NON_FOLLOWERS_FILE']) as in_file:
-                unfollow_users = [l.strip() for l in in_file.readlines() if l.strip()]
-
-        def unfollow(user_id):
-            with semaphore:
-                subquery = self.TWITTER_CONNECTION.users.lookup(user_id=user_id)
-                for user in subquery:
-                    print ("Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"]))
-                time.sleep(5)
-                unfollowed = self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
-
-        for user_id in unfollow_users:
-            threading.Thread(target=unfollow, args=(user_id, )).start()
-
-
-    def find_nonfollowers(self):
-        """
-            find everyone who hasn't followed you back.
-        """
-
-        following = self.get_follows_list()
-        followers = self.get_followers_list()
-
-        not_following_back = list(following - followers)
-        non_followers = []
-        self.non_followers = []
-        for n in range(0, len(not_following_back), 99):
-            ids = not_following_back[n: n + 99]
-            subquery = self.TWITTER_CONNECTION.users.lookup(user_id=ids)
-            for user in subquery:
-                self.non_followers.append("@%s %s" % (user["screen_name"], user["id"]))
-                non_followers.append(" [%s] @%s [id: %s]" % (
-                    "*" if user["verified"] else " ", user["screen_name"], user["id"]))
-
-        with open(self.BOT_CONFIG["NON_FOLLOWERS_FILE"], 'w') as out_file:
-            for val in non_followers:
-                out_file.write(str(val) + '\n')
-
-
-    # def auto_unfollow_all_followers(self,count=None):
-    #     """
-    #         Unfollows everyone that you are following(except those who you have specified not to)
-    #     """
-    #     following = self.get_follows_list()
-
-    #     for user_id in following:
-    #         if user_id not in self.BOT_CONFIG["USERS_KEEP_FOLLOWING"]:
-
-    #             self.wait_on_action()
-
-    #             self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
-    #             print("Unfollowed %d" % (user_id), file=sys.stdout)
+                self.unfollow_user(user_id)
 
     def auto_mute_following(self):
         """
             Mutes everyone that you are following.
         """
-
         following = self.get_follows_list()
         muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
@@ -483,43 +403,62 @@ class TwitterBot:
         for user_id in not_muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_UNMUTED"]:
                 self.TWITTER_CONNECTION.mutes.users.create(user_id=user_id)
-                print("Muted %d" % (user_id), file=sys.stdout)
+                self.logger.info("Muted %d" % (user_id))
 
     def auto_unmute(self):
         """
             Unmutes everyone that you have muted.
         """
-
         muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
 
         for user_id in muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_MUTED"]:
                 self.TWITTER_CONNECTION.mutes.users.destroy(user_id=user_id)
-                print("Unmuted %d" % (user_id), file=sys.stdout)
+                self.logger.info("Unmuted %d" % (user_id))
 
+    # ----------------------------------
+    def unfollow_list_of_users(self, users=[]):
+        """
+        Unfollows a list of users
+        Params: list
+            users: List of users to be unfollowed
+        """
+        try:
+            assert users
+            unfollow_users = users
+        except Exception as err_msg:
+            self.logger.exception('Failed to parse list of users, will read from file')
+            with open(self.BOT_CONFIG['NON_FOLLOWERS_FILE']) as in_file:
+                unfollow_users = [l.strip() for l in in_file.readlines() if l.strip()]
+
+        for user_id in unfollow_users:
+            self.unfollow_user(user_id)
+    # ----------------------------------
     def send_tweet(self, message):
         """
             Posts a tweet.
         """
-
         return self.TWITTER_CONNECTION.statuses.update(status=message)
 
     def auto_add_to_list(self, phrase, list_slug, count=100, result_type="recent"):
         """
             Add users to list slug that are tweeting phrase.
         """
-
         result = self.search_tweets(phrase, count, result_type)
-
         for tweet in result["statuses"]:
             try:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
+                result = self.TWITTER_CONNECTION.lists.members.create(
+                    owner_screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
+                    slug=list_slug, screen_name=tweet["user"]["screen_name"])
+                self.logger.info("User %s added to the list %s" % (
+                    tweet["user"]["screen_name"], list_slug))
+            except Exception as api_error:
+                self.logger.error('%s' % str(api_error))
 
-                result = self.TWITTER_CONNECTION.lists.members.create(owner_screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
-                                                                      slug=list_slug,
-                                                                      screen_name=tweet["user"]["screen_name"])
-                print("User %s added to the list %s" % (tweet["user"]["screen_name"], list_slug), file=sys.stdout)
-            except TwitterHTTPError as api_error:
-                print(api_error)
+
+if __name__ == '__main__':
+    my_bot = TwitterBot()
+    import IPython; globals().update(locals()); IPython.embed(header='\n'.join(dir(my_bot)))
