@@ -183,7 +183,10 @@ class TwitterBot(loggingClass):
             time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
             subquery = self.username_lookup(user_id)
             for user in subquery:
-                self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
+                if not user['protected']:
+                    self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
+                else:
+                    self.logger.info("User @%s Protected and will not follow" % user["screen_name"])
         except Exception as api_error:
             self.logger.error("Error: %s" % str(api_error))
 
@@ -317,14 +320,10 @@ class TwitterBot(loggingClass):
             self.sync_follows
         result = self.search_tweets(phrase, count, result_type)
         following = self.get_follows_list()
-        do_not_follow = self.get_do_not_follow_list()
-
         for tweet in result["statuses"]:
             try:
                 if (tweet["user"]["screen_name"] != self.BOT_CONFIG["TWITTER_HANDLE"] and
-                        tweet["user"]["id"] not in following and
-                        tweet["user"]["id"] not in do_not_follow):
-
+                        tweet["user"]["id"] not in following):
                     self.follow_user(tweet["user"]["id"])
                     following.update(set([tweet["user"]["id"]]))
             except Exception as api_error:
@@ -344,13 +343,7 @@ class TwitterBot(loggingClass):
         not_following_back = list(not_following_back)[:count]
 
         for user_id in not_following_back:
-            subquery = self.username_lookup(user_id)
-            for user in subquery:
-                if not user['protected']:
-                    self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
-                    followed = self.follow_user(user_id, True)
-                else:
-                    self.logger.info("User @%s Protected and will not follow" % user["screen_name"])
+            followed = self.follow_user(user_id, True)
 
     def auto_follow_followers_of_user(self, user_twitter_handle, count=100):
         """
