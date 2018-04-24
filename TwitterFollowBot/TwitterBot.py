@@ -54,6 +54,8 @@ class TwitterBot(loggingClass):
         # this variable contains the authorized connection to the Twitter API
         self.TWITTER_CONNECTION = None
         self.bot_setup(config_file)
+        # Used for random timers
+        random.seed()
 
     def bot_setup(self, config_file="config.txt"):
         """
@@ -116,6 +118,29 @@ class TwitterBot(loggingClass):
                                                      self.BOT_CONFIG["OAUTH_SECRET"],
                                                      self.BOT_CONFIG["CONSUMER_KEY"],
                                                      self.BOT_CONFIG["CONSUMER_SECRET"]))
+
+    def wait_to_confuse_twitter(self):
+        min_time = 0
+        max_time = 0
+        if "FOLLOW_BACKOFF_MIN_SECONDS" in self.BOT_CONFIG:
+            min_time = int(self.BOT_CONFIG["FOLLOW_BACKOFF_MIN_SECONDS"])
+
+        if "FOLLOW_BACKOFF_MAX_SECONDS" in self.BOT_CONFIG:
+            max_time = int(self.BOT_CONFIG["FOLLOW_BACKOFF_MAX_SECONDS"])
+
+        if min_time > max_time:
+            temp = min_time
+            min_time = max_time
+            max_time = temp
+
+        wait_time = random.randint(min_time, max_time)
+
+        if wait_time > 0:
+            self.logger.info("Choosing time between %d and %d - waiting %d seconds before action" % (
+                min_time, max_time, wait_time))
+            time.sleep(wait_time)
+
+        return wait_time
 
     @property
     def sync_follows(self):
@@ -180,7 +205,7 @@ class TwitterBot(loggingClass):
         '''
         try:
             self.TWITTER_CONNECTION.friendships.create(user_id=user_id, follow=_follow)
-            time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+            self.wait_to_confuse_twitter()
             subquery = self.username_lookup(user_id)
             for user in subquery:
                 if not user['protected']:
@@ -199,14 +224,14 @@ class TwitterBot(loggingClass):
         '''
         try:
             self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
-            time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+            self.wait_to_confuse_twitter()
             subquery = self.username_lookup(user_id)
             for user in subquery:
                 self.logger.info("Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"]))
         except Exception as api_error:
             self.logger.error("Error: %s" % str(api_error))
 
-    def username_lookup(self, ids):
+    def username_lookup(self, user_id):
         """
         Find username by id
         Params: int
@@ -214,7 +239,7 @@ class TwitterBot(loggingClass):
         Return: dict
             Dict with Users information
         """
-        return self.TWITTER_CONNECTION.users.lookup(user_id=ids)
+        return self.TWITTER_CONNECTION.users.lookup(user_id=user_id)
     # ----------------------------------
     def get_do_not_follow_list(self):
         """
@@ -285,7 +310,7 @@ class TwitterBot(loggingClass):
                 # don't favorite your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+                self.wait_to_confuse_twitter()
                 result = self.TWITTER_CONNECTION.favorites.create(_id=tweet["id"])
                 self.logger.info("Favourite: %s" % (result["text"].encode("utf-8")))
             # when you have already favorited a tweet, this error is thrown
@@ -304,7 +329,7 @@ class TwitterBot(loggingClass):
                 # don't retweet your own tweets
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                time.sleep(int(self.BOT_CONFIG['WAIT_TIME']))
+                self.wait_to_confuse_twitter()
                 result = self.TWITTER_CONNECTION.statuses.retweet(id=tweet["id"])
                 self.logger.info("Retweeted: %s" % (result["text"].encode("utf-8")))
             # when you have already retweeted a tweet, this error is thrown
@@ -330,7 +355,7 @@ class TwitterBot(loggingClass):
                 # quit on rate limit errors
                 self.logger.error("Error: %s" % (str(api_error)))
 
-    def auto_follow_followers(self, count=None, auto_sync=False):
+    def auto_follow_followers(self, auto_sync=False):
         """
             Follows back everyone who's followed you.
         """
@@ -339,23 +364,23 @@ class TwitterBot(loggingClass):
         following = self.get_follows_list()
         followers = self.get_followers_list()
 
-        not_following_back = followers - following
-        not_following_back = list(not_following_back)[:count]
+        not_following_back = list(followers - following)
+        for i in xrange(0, len(not_following_back), 99):
+            for user_id in not_following_back[i: i + 99]:
+                self.follow_user(user_id, True)
 
-        for user_id in not_following_back:
-            followed = self.follow_user(user_id, True)
-
-    def auto_follow_followers_of_user(self, user_twitter_handle, count=100):
+    def auto_follow_followers_of_user(self, user_twitter_handle):
         """
             Follows the followers of a specified user.
         """
         followers_of_user = set(self.TWITTER_CONNECTION.followers.ids(
-            screen_name=user_twitter_handle)["ids"][:count])
+            screen_name=user_twitter_handle)["ids"])
+        followers_of_user = list(followers_of_user)
+        for i in xrange(0, len(followers_of_user), 99):
+            for user_id in followers_of_user[i: i + 99]:
+                self.follow_user(user_id, True)
 
-        for user_id in followers_of_user:
-            self.follow_user(user_id, True)
-
-    def auto_unfollow_nonfollowers(self, count=None, auto_sync=False):
+    def auto_unfollow_nonfollowers(self, auto_sync=False):
         """
             Unfollows everyone who hasn't followed you back.
         """
@@ -364,8 +389,7 @@ class TwitterBot(loggingClass):
         following = self.get_follows_list()
         followers = self.get_followers_list()
 
-        not_following_back = following - followers
-        not_following_back = list(not_following_back)[:count]
+        not_following_back = list(following - followers)
         # update the "already followed" file with users who didn't follow back
         already_followed = set(not_following_back)
         already_followed_list = []
