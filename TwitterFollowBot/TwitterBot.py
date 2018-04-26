@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 
 """
@@ -17,18 +19,22 @@ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more de
 You should have received a copy of the GNU General Public License along with
 the Twitter Bot library. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import print_function
-import os
-import sys
-import time
-import random
-import threading
+# from __future__ import print_function
+import argparse
+import coloredlogs
+import csv
 import logging
+import moment
+import os
+import random
+import sys
+import threading
+import time
 
 from twitter import Twitter
 from twitter import OAuth
+from dateutil.parser import parse
 
-log_format = '%(asctime)s - %(name)s - %(levelname)s : %(lineno)d - %(message)s'
 
 # This class could be imported from a utility module
 class loggingClass(object):
@@ -52,7 +58,7 @@ class TwitterBot(loggingClass):
         # this variable contains the configuration for the bot
         self.BOT_CONFIG = {}
         # this variable contains the authorized connection to the Twitter API
-        self.TWITTER_CONNECTION = None
+        self.twitter_con = None
         self.bot_setup(config_file)
         # Used for random timers
         random.seed()
@@ -109,12 +115,12 @@ class TwitterBot(loggingClass):
         # if they are old
         if (time.time() - os.path.getmtime(self.BOT_CONFIG["FOLLOWS_FILE"]) > 86400 or
                 time.time() - os.path.getmtime(self.BOT_CONFIG["FOLLOWERS_FILE"]) > 86400):
-            self.logger.info("Warning: Your Twitter follower sync files are more than a day old. "
+            self.logger.warn("Your Twitter follower sync files are more than a day old. "
                   "It is highly recommended that you sync them by calling sync_follows() "
                   "before continuing.")
 
         # create an authorized connection to the Twitter API
-        self.TWITTER_CONNECTION = Twitter(auth=OAuth(self.BOT_CONFIG["OAUTH_TOKEN"],
+        self.twitter_con = Twitter(auth=OAuth(self.BOT_CONFIG["OAUTH_TOKEN"],
                                                      self.BOT_CONFIG["OAUTH_SECRET"],
                                                      self.BOT_CONFIG["CONSUMER_KEY"],
                                                      self.BOT_CONFIG["CONSUMER_SECRET"]))
@@ -136,8 +142,7 @@ class TwitterBot(loggingClass):
         wait_time = random.randint(min_time, max_time)
 
         if wait_time > 0:
-            self.logger.info("Choosing time between %d and %d - waiting %d seconds before action" % (
-                min_time, max_time, wait_time))
+            self.logger.info("sleeping for %d seconds before action" % wait_time)
             time.sleep(wait_time)
 
         return wait_time
@@ -156,7 +161,7 @@ class TwitterBot(loggingClass):
         """
 
         self.logger.info("Sync the user's followers (accounts following the user).")
-        followers_status = self.TWITTER_CONNECTION.followers.ids(
+        followers_status = self.twitter_con.followers.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
         followers = set(followers_status["ids"])
         next_cursor = followers_status["next_cursor"]
@@ -166,7 +171,7 @@ class TwitterBot(loggingClass):
                 out_file.write("%s\n" % (follower))
 
         while next_cursor != 0:
-            followers_status = self.TWITTER_CONNECTION.followers.ids(
+            followers_status = self.twitter_con.followers.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor)
             followers = set(followers_status["ids"])
             next_cursor = followers_status["next_cursor"]
@@ -176,7 +181,7 @@ class TwitterBot(loggingClass):
                     out_file.write("%s\n" % (follower))
 
         # sync the user's follows (accounts the user is following)
-        following_status = self.TWITTER_CONNECTION.friends.ids(
+        following_status = self.twitter_con.friends.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])
         following = set(following_status["ids"])
         next_cursor = following_status["next_cursor"]
@@ -186,7 +191,7 @@ class TwitterBot(loggingClass):
                 out_file.write("%s\n" % (follow))
 
         while next_cursor != 0:
-            following_status = self.TWITTER_CONNECTION.friends.ids(
+            following_status = self.twitter_con.friends.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor)
             following = set(following_status["ids"])
             next_cursor = following_status["next_cursor"]
@@ -204,14 +209,14 @@ class TwitterBot(loggingClass):
         Returns: None
         '''
         try:
-            self.TWITTER_CONNECTION.friendships.create(user_id=user_id, follow=_follow)
-            self.wait_to_confuse_twitter()
             subquery = self.username_lookup(user_id)
             for user in subquery:
                 if not user['protected']:
+                    self.wait_to_confuse_twitter()
+                    self.twitter_con.friendships.create(user_id=user_id, follow=_follow)
                     self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
                 else:
-                    self.logger.info("User @%s Protected and will not follow" % user["screen_name"])
+                    self.logger.warn("User @%s Protected and will not follow" % user["screen_name"])
         except Exception as api_error:
             self.logger.error("Error: %s" % str(api_error))
 
@@ -223,13 +228,16 @@ class TwitterBot(loggingClass):
         Returns: None
         '''
         try:
-            self.TWITTER_CONNECTION.friendships.destroy(user_id=user_id)
+            self.twitter_con.friendships.destroy(user_id=user_id)
             self.wait_to_confuse_twitter()
             subquery = self.username_lookup(user_id)
             for user in subquery:
                 self.logger.info("Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"]))
         except Exception as api_error:
             self.logger.error("Error: %s" % str(api_error))
+
+    def who_am_i(self):
+        self.logger.info('Username is %s' % self.BOT_CONFIG['TWITTER_HANDLE'])
 
     def username_lookup(self, user_id):
         """
@@ -239,12 +247,13 @@ class TwitterBot(loggingClass):
         Return: dict
             Dict with Users information
         """
-        return self.TWITTER_CONNECTION.users.lookup(user_id=user_id)
+        return self.twitter_con.users.lookup(user_id=user_id)
     # ----------------------------------
     def get_do_not_follow_list(self):
         """
             Returns the set of users the bot has already followed in the past.
         """
+        self.logger.info("Getting all users I have already followed in the past.")
         dnf_list = []
         with open(self.BOT_CONFIG["ALREADY_FOLLOWED_FILE"], "r") as in_file:
             for line in in_file:
@@ -255,6 +264,7 @@ class TwitterBot(loggingClass):
         """
             Returns the set of users that are currently following the user.
         """
+        self.logger.info("Getting all followers.")
         followers_list = []
         with open(self.BOT_CONFIG["FOLLOWERS_FILE"], "r") as in_file:
             for line in in_file:
@@ -265,40 +275,45 @@ class TwitterBot(loggingClass):
         """
             Returns the set of users that the user is currently following.
         """
+        self.logger.info('Getting all users I follow')
         follows_list = []
         with open(self.BOT_CONFIG["FOLLOWS_FILE"], "r") as in_file:
             for line in in_file:
                 follows_list.append(int(line))
         return set(follows_list)
 
-    def get_all_nonfollowers(self, auto_sync=False):
+    def get_all_nonfollowers(self, get_name=False, auto_sync=False):
         """
         find everyone who hasn't followed you back.
         """
+        self.logger.info("Getting everyone who hasn't followed you back.")
         if auto_sync:
             self.sync_follows
 
         following = self.get_follows_list()
         followers = self.get_followers_list()
-
+        self.logger.info('Followers: %s, Following: %s' %(len(followers), len(following)))
         not_following_back = list(following - followers)
         non_followers = []
+        _non_followers = []
         for n in range(0, len(not_following_back), 99):
             ids = not_following_back[n: n + 99]
-            subquery = self.username_lookup(ids)
-            for user in subquery:
-                non_followers.append("[%s] @%s [id: %s]" % (
-                    "*" if user["verified"] else " ", user["screen_name"], user["id"]))
+            _non_followers.append(ids)
+            if get_name:
+                subquery = self.username_lookup(ids)
+                for user in subquery:
+                    non_followers.append("[%s] @%s [id: %s]" % (
+                        "*" if user["verified"] else " ", user["screen_name"], user["id"]))
 
         with open(self.BOT_CONFIG["NON_FOLLOWERS_FILE"], 'w') as out_file:
-            for val in non_followers:
+            for val in _non_followers:
                 out_file.write(str(val) + '\n')
     # ----------------------------------
     def search_tweets(self, phrase, count=100, result_type="recent"):
         """
         Returns a list of tweets matching a phrase (hashtag, word, etc.).
         """
-        return self.TWITTER_CONNECTION.search.tweets(q=phrase, result_type=result_type, count=count)
+        return self.twitter_con.search.tweets(q=phrase, result_type=result_type, count=count)
     # ----------------------------------
     def auto_fav_by_hashtag(self, phrase, count=100, result_type="recent"):
         """
@@ -311,7 +326,7 @@ class TwitterBot(loggingClass):
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
                 self.wait_to_confuse_twitter()
-                result = self.TWITTER_CONNECTION.favorites.create(_id=tweet["id"])
+                result = self.twitter_con.favorites.create(_id=tweet["id"])
                 self.logger.info("Favourite: %s" % (result["text"].encode("utf-8")))
             # when you have already favorited a tweet, this error is thrown
             except Exception as api_error:
@@ -330,7 +345,7 @@ class TwitterBot(loggingClass):
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
                 self.wait_to_confuse_twitter()
-                result = self.TWITTER_CONNECTION.statuses.retweet(id=tweet["id"])
+                result = self.twitter_con.statuses.retweet(id=tweet["id"])
                 self.logger.info("Retweeted: %s" % (result["text"].encode("utf-8")))
             # when you have already retweeted a tweet, this error is thrown
             except Exception as api_error:
@@ -363,8 +378,8 @@ class TwitterBot(loggingClass):
             self.sync_follows
         following = self.get_follows_list()
         followers = self.get_followers_list()
-
-        not_following_back = list(followers - following)
+        already_followed = self.get_do_not_follow_list()
+        not_following_back = list(followers - following - already_followed)
         for i in xrange(0, len(not_following_back), 99):
             for user_id in not_following_back[i: i + 99]:
                 self.follow_user(user_id, True)
@@ -373,7 +388,7 @@ class TwitterBot(loggingClass):
         """
             Follows the followers of a specified user.
         """
-        followers_of_user = set(self.TWITTER_CONNECTION.followers.ids(
+        followers_of_user = set(self.twitter_con.followers.ids(
             screen_name=user_twitter_handle)["ids"])
         followers_of_user = list(followers_of_user)
         for i in xrange(0, len(followers_of_user), 99):
@@ -412,26 +427,26 @@ class TwitterBot(loggingClass):
             Mutes everyone that you are following.
         """
         following = self.get_follows_list()
-        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
+        muted = set(self.twitter_con.mutes.users.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
 
         not_muted = following - muted
 
         for user_id in not_muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_UNMUTED"]:
-                self.TWITTER_CONNECTION.mutes.users.create(user_id=user_id)
+                self.twitter_con.mutes.users.create(user_id=user_id)
                 self.logger.info("Muted %d" % (user_id))
 
     def auto_unmute(self):
         """
             Unmutes everyone that you have muted.
         """
-        muted = set(self.TWITTER_CONNECTION.mutes.users.ids(
+        muted = set(self.twitter_con.mutes.users.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])["ids"])
 
         for user_id in muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_MUTED"]:
-                self.TWITTER_CONNECTION.mutes.users.destroy(user_id=user_id)
+                self.twitter_con.mutes.users.destroy(user_id=user_id)
                 self.logger.info("Unmuted %d" % (user_id))
 
     # ----------------------------------
@@ -456,7 +471,7 @@ class TwitterBot(loggingClass):
         """
             Posts a tweet.
         """
-        return self.TWITTER_CONNECTION.statuses.update(status=message)
+        return self.twitter_con.statuses.update(status=message)
 
     def auto_add_to_list(self, phrase, list_slug, count=100, result_type="recent"):
         """
@@ -467,7 +482,7 @@ class TwitterBot(loggingClass):
             try:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                result = self.TWITTER_CONNECTION.lists.members.create(
+                result = self.twitter_con.lists.members.create(
                     owner_screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
                     slug=list_slug, screen_name=tweet["user"]["screen_name"])
                 self.logger.info("User %s added to the list %s" % (
@@ -476,3 +491,166 @@ class TwitterBot(loggingClass):
                 self.logger.error('%s' % str(api_error))
 
 
+    def del_twits_to_date(self, to_date='2000-01-01', tweets_csv_file=None):
+        """
+        Open browser and go to https://twitter.com/settings/account
+        Click: get your Your Twitter archive
+        ---wait for file then download and extract to directory---
+
+        to_date: str
+            date to delete from!
+            format: YYYY-MM-DD
+        tweet_csv_file: csv
+            location where the file is stored
+        """
+        self.logger.info('Deleting old tweets!!!')
+        _deleted = False
+        if tweets_csv_file is None:
+            self.logger.error('Need a CSV file to continue')
+
+        try:
+            time.strptime(to_date, '%Y-%m-%d')
+        except Exception:
+            self.logger.error('Date must be in correct format!!')
+            return
+
+        try:
+            input_file = csv.DictReader(open(tweets_csv_file))
+        except Exception:
+            self.logger.error('File corrupted: retry')
+            return
+        _deleted_twits = []
+        _tweet_id_ignore = []
+        for count, row in enumerate(input_file, 1):
+            tweet_timestamp = parse(row.get("timestamp", '1999-01-01'), ignoretz=True).date()
+            tweet_id = int(row.get('tweet_id', 0))
+            if to_date != "" and tweet_timestamp < parse(to_date).date():
+                try:
+                    self.wait_to_confuse_twitter()
+                    _state = self.twitter_con.statuses.destroy(id=tweet_id)
+                    self.logger.info('Deleted tweet: %s: %s' % (tweet_timestamp,
+                        row.get('text', '').replace('\n','')))
+                    _deleted_twits.append(_state)
+                except Exception as err:
+                    self.logger.error('%s' % (str(err.response_data)))
+                _deleted = True
+
+        if _deleted:
+            self.logger.info('Number of deleted tweets: %s' % (count))
+
+    # def cleanup_my_twits(self, max_status_id=0):
+    #     """
+    #     """
+
+    #     _me = self.BOT_CONFIG.get('TWITTER_HANDLE')
+    #     timeline_args = {
+    #                         'screen_name': _me,
+    #                         'count': 200,
+    #                         'trim_user': 'true',
+    #                         'include_rts': 'true'
+    #                     }
+
+    #     if max_status_id != 0:
+    #         timeline_args['max_id'] = max_status_id
+
+
+    #     import IPython; globals().update(locals()); IPython.embed(header='Python Debugger')
+    #     get_mytwits = self.twitter_con.statuses.user_timeline(**timeline_args)
+
+    #     for twit in get_mytwits:
+    #         twit
+    #     time.strptime(created_at, "%a %b %d %H:%M:%S +0000 %Y")
+    #     tweet_date = '%s-%s-%s' % (tweet_date.tm_year, tweet_date.tm_mon, tweet_date.tm_mday)
+    #     tweet_date = moment(tweet_date, DATE_FORMAT)
+
+
+    #     all_my_tweets = set(twit.get('id') for twit in get_mytwits)
+    #     all_my_tweets = sorted(list(all_my_tweets))
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description=None)
+
+    parser.add_argument('-c', '--config', dest='config_file', action='store', default='config.txt',
+        required=True, help='Config file which contains all required info.')
+
+    parser.add_argument('--file', dest='tweets_csv', action='store',
+        help='Your Twitter archive csv file')
+
+    parser.add_argument('--sync', dest='sync_twitter', action='store_true', default=False, help='')
+
+    parser.add_argument('--to_date', dest='to_date', action='store', help='')
+
+    parser.add_argument('--username', dest='who_am_i', action='store_true', help='')
+
+    parser.add_argument('--get-all-followers', dest='get_followers', action='store_true', default=False,
+        help='Get all followers, following, non-followers and already-followed')
+
+    parser.add_argument('--follow-user', dest='user_twitter_handle', action='store_true',
+        default=False, help='follow a user')
+
+    parser.add_argument('--auto-follow-back', dest='flw_bk', action='store_true', default=False,
+        help="Follows back everyone who's followed you.")
+
+    parser.add_argument('--unfollow', dest='unflw_non_flws', action='store_true', default=False,
+        help=' Unfollow everyone who hasn\'t followed you back.')
+
+    parser.add_argument('--twit', dest='message', action='store', help='Posts a tweet.')
+
+    parser.add_argument('--ipython', dest='debug', action='store_true', default=False,
+        help='Open an IPython session for debugging.')
+
+    parser.add_argument('--loglevel', dest='log_level', action='store', default='INFO',
+        help='log level to use, default INFO, options INFO, DEBUG, ERROR')
+
+    args = vars(parser.parse_args())
+    log_level = None
+    log_format = '%(asctime)s - %(name)s - %(levelname)s : %(lineno)d - %(message)s'
+
+    if args.get("log_level", 'INFO'):
+        log_level = args.get("log_level", 'INFO').upper()
+        try:
+            logging.basicConfig(level=getattr(logging, log_level), format=log_format)
+            logger = logging.getLogger(os.path.basename(sys.argv[0]))
+        except AttributeError:
+            raise RuntimeError('No such log level: %s' % log_level)
+        else:
+            if log_level == 'DEBUG':
+                coloredlogs.install(level=log_level, fmt=log_format)
+            else:
+                coloredlogs.install(level=log_level)
+
+    if not args.get('config_file'):
+        sys.exit(1)
+    my_bot = TwitterBot(args.get('config_file'))
+
+    if args.get('who_am_i'):
+        my_bot.who_am_i()
+
+    if args.get('sync_twitter'):
+        my_bot.sync_follows
+
+    if args.get('get_followers'):
+        my_bot.get_all_nonfollowers()
+        my_bot.get_do_not_follow_list()
+
+    if args.get('user_twitter_handle'):
+        my_bot.auto_follow_followers_of_user(args.get('user_twitter_handle'))
+
+    if args.get('flw_bk'):
+        my_bot.auto_follow_followers()
+
+    if args.get('unflw_non_flws'):
+        my_bot.auto_unfollow_nonfollowers()
+
+    if args.get('message'):
+        my_bot.send_tweet(args.get('message'))
+
+    if args.get('to_date') and args.get('tweets_csv'):
+        my_bot.del_twits_to_date(to_date=args.get('to_date'), tweets_csv_file=args.get('tweets_csv'))
+
+    if args.get('debug'):
+        import IPython
+        globals().update(locals())
+        IPython.embed(header='Python Debugger')
