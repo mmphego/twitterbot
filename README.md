@@ -1,3 +1,4 @@
+
 [![PyPI version](https://badge.fury.io/py/TwitterFollowBot.svg)](https://badge.fury.io/py/TwitterFollowBot)
 ![Python 2.7](https://img.shields.io/badge/python-2.7-blue.svg)
 ![Python 3.5](https://img.shields.io/badge/python-3.5-blue.svg)
@@ -54,6 +55,7 @@ Before running the bot, you must first set it up so it can connect to the Twitte
     ALREADY_FOLLOWED_FILE:already-followed.txt
     FOLLOWERS_FILE:followers.txt
     FOLLOWS_FILE:following.txt
+    NON_FOLLOWERS_FILE:non-followers.txt
     USERS_KEEP_FOLLOWING:
     USERS_KEEP_UNMUTED:
     USERS_KEEP_MUTED:
@@ -80,14 +82,49 @@ For example:
     USERS_KEEP_UNMUTED:
     ...
     
-You can look up a users' Twitter ID [here](http://tweeterid.com/).
+You can look up a users' Twitter ID [here](http://tweeterid.com/) or *my_bot.username_lookup*.
 
-### Create an instance of the bot
+### Usage
 
-To create an instance of the bot:
+```
+usage: TwitterBot.py [-h] -c CONFIG_FILE [--username] [--sync]
+                     [--get-all-followers] [--follow-user]
+                     [--auto-follow-back] [--unfollow] [--twit MESSAGE]
+                     [--to_date TO_DATE] [--file TWEETS_CSV] [--ipython]
+                     [--loglevel LOG_LEVEL]
+
+A Python bot that automates several actions on Twitter, such as following
+users and favoriting tweets.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -c CONFIG_FILE, --config CONFIG_FILE
+                        Config file which contains all required info.
+  --username            Get your username.
+  --sync                Syncing your Twitter following locally. Due to Twitter
+                        API rate limiting, the bot must maintain a local cache
+                        of all of your followers so it doesn't use all of your
+                        API time looking up your followers. It is highly
+                        recommended to sync the bot's local cache daily
+  --get-all-followers   Get all followers, following, non-followers and
+                        already-followed
+  --follow-user         follow a user
+  --auto-follow-back    Follows back everyone who's followed you.
+  --unfollow            Unfollow everyone who hasn't followed you back.
+  --twit MESSAGE        Posts a tweet.
+  --to_date TO_DATE     Date to start deleting tweets from!!!
+  --file TWEETS_CSV     Your Twitter archive csv file,
+                        https://twitter.com/settings/account and request your
+                        archive
+  --ipython             Open an IPython session for debugging.
+  --loglevel LOG_LEVEL  log level to use, default INFO, options INFO, DEBUG,
+                        ERROR
+
+```
+### Under the hood!
+The bot creates an instance:
 
     from TwitterFollowBot import TwitterBot
-    
     my_bot = TwitterBot()
     
 By default, the bot will look for a configuration file called `config.txt` in your current directory.
@@ -105,7 +142,7 @@ Note that this allows you to run multiple instances of the bot with different co
     my_bot = TwitterBot()
     my_other_bot = TwitterBot("my-other-bot-config.txt")
 
-### Syncing your Twitter following locally
+#### Syncing your Twitter following locally
 
 Due to Twitter API rate limiting, the bot must maintain a local cache of all of your followers so it doesn't use all of your API time looking up your followers. It is highly recommended to sync the bot's local cache daily:
 
@@ -118,11 +155,11 @@ The bot will create cache files where you specified in the configuration file.
     
 **DO NOT** delete the cache files ("followers.txt", "follows.txt", and "already-followed.txt" by default) unless you want to start the bot over with a fresh cache.
 
-### Automating Twitter actions with the bot
+#### Automating Twitter actions with the bot
 
 This bot has several functions for programmatically interacting with Twitter:
 
-#### Automatically follow any users that tweet something with a specific phrase
+##### Automatically follow any users that tweet something with a specific phrase
 
     from TwitterFollowBot import TwitterBot
     
@@ -143,35 +180,35 @@ By default, the bot looks up the 100 most recent tweets. You can change this num
     my_bot = TwitterBot()
     my_bot.auto_follow("phrase", count=1000)
     
-#### Automatically follow any users that have followed you
+##### Automatically follow any users that have followed you
 
     from TwitterFollowBot import TwitterBot
     
     my_bot = TwitterBot()
     my_bot.auto_follow_followers()
 
-#### Automatically follow any users that follow a user
+##### Automatically follow any users that follow a user
     
     from TwitterFollowBot import TwitterBot
     
     my_bot = TwitterBot() 
     my_bot.auto_follow_followers_of_user("jack", count=1000)
 
-#### Automatically favorite any tweets that have a specific phrase
+##### Automatically favorite any tweets that have a specific phrase
 
     from TwitterFollowBot import TwitterBot
     
     my_bot = TwitterBot()
     my_bot.auto_fav("phrase", count=1000)
     
-#### Automatically retweet any tweets that have a specific phrase
+##### Automatically retweet any tweets that have a specific phrase
 
     from TwitterFollowBot import TwitterBot
     
     my_bot = TwitterBot()
     my_bot.auto_rt("phrase", count=1000)
 
-#### Automatically unfollow any users that have not followed you back
+##### Automatically unfollow any users that have not followed you back
 
     from TwitterFollowBot import TwitterBot
     
@@ -182,7 +219,7 @@ If there are certain users that you would like to not unfollow, add their user i
 
 You will need to manually edit the code if you want to add special users that you will keep following even if they don't follow you back.
 
-#### Automatically unfollow all users.
+##### Automatically unfollow all users.
 
     from TwitterFollowBot import TwitterBot
     
@@ -191,7 +228,7 @@ You will need to manually edit the code if you want to add special users that yo
   
 
 
-#### Automatically mute all users that you have followed
+##### Automatically mute all users that you have followed
 
     from TwitterFollowBot import TwitterBot
     
@@ -200,7 +237,7 @@ You will need to manually edit the code if you want to add special users that yo
 
 You will need to manually edit the code if you want to add special users that you will not mute.
 
-#### Automatically unmute everyone you have muted
+##### Automatically unmute everyone you have muted
 
     from TwitterFollowBot import TwitterBot
     
@@ -209,14 +246,14 @@ You will need to manually edit the code if you want to add special users that yo
     
 You will need to manually edit the code if you want to add special users that will remain muted. 
 
-#### Post a tweet on twitter
+##### Post a tweet on twitter
 
     from TwitterFollowBot import TwitterBot
     
     my_bot = TwitterBot()
     my_bot.send_tweet("Hello world!")
 
-#### Automatically add users tweeting about something to one of your list
+##### Automatically add users tweeting about something to one of your list
 
     from TwitterFollowBot import TwitterBot
     
