@@ -19,7 +19,7 @@ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more de
 You should have received a copy of the GNU General Public License along with
 the Twitter Bot library. If not, see http://www.gnu.org/licenses/.
 """
-# from __future__ import print_function
+from __future__ import print_function
 import argparse
 import coloredlogs
 import csv
@@ -570,37 +570,32 @@ class TwitterBot(loggingClass):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description=None)
+    parser = argparse.ArgumentParser(description=('A Python bot that automates several actions on '
+                                                  'Twitter, such as following users and favoriting tweets.'))
 
     parser.add_argument('-c', '--config', dest='config_file', action='store', default='config.txt',
         required=True, help='Config file which contains all required info.')
-
-    parser.add_argument('--file', dest='tweets_csv', action='store',
-        help='Your Twitter archive csv file')
-
-    parser.add_argument('--sync', dest='sync_twitter', action='store_true', default=False, help='')
-
-    parser.add_argument('--to_date', dest='to_date', action='store', help='')
-
-    parser.add_argument('--username', dest='who_am_i', action='store_true', help='')
-
-    parser.add_argument('--get-all-followers', dest='get_followers', action='store_true', default=False,
-        help='Get all followers, following, non-followers and already-followed')
-
+    parser.add_argument('--username', dest='who_am_i', action='store_true', help='Get your username.')
+    parser.add_argument('--sync', dest='sync_twitter', action='store_true', default=False,
+        help=('Syncing your Twitter following locally. Due to Twitter API rate limiting, '
+              'the bot must maintain a local cache of all of your followers so it doesn\'t '
+              'use all of your API time looking up your followers. '
+              'It is highly recommended to sync the bot\'s local cache daily'))
+    parser.add_argument('--get-all-followers', dest='get_followers', action='store_true',
+        default=False, help='Get all followers, following, non-followers and already-followed')
     parser.add_argument('--follow-user', dest='user_twitter_handle', action='store_true',
         default=False, help='follow a user')
-
     parser.add_argument('--auto-follow-back', dest='flw_bk', action='store_true', default=False,
         help="Follows back everyone who's followed you.")
-
     parser.add_argument('--unfollow', dest='unflw_non_flws', action='store_true', default=False,
         help=' Unfollow everyone who hasn\'t followed you back.')
-
     parser.add_argument('--twit', dest='message', action='store', help='Posts a tweet.')
-
+    parser.add_argument('--to_date', dest='to_date', action='store',
+        help='Date to start deleting tweets from!!!')
+    parser.add_argument('--file', dest='tweets_csv', action='store',
+        help='Your Twitter archive csv file, https://twitter.com/settings/account and request your archive')
     parser.add_argument('--ipython', dest='debug', action='store_true', default=False,
         help='Open an IPython session for debugging.')
-
     parser.add_argument('--loglevel', dest='log_level', action='store', default='INFO',
         help='log level to use, default INFO, options INFO, DEBUG, ERROR')
 
