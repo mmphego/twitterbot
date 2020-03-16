@@ -1,2 +1,4 @@
 twitter
 moment
+coloredlogs
+ipython

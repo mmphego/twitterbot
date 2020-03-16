@@ -1,5 +1,7 @@
+config.txt
 *.csv
 *.pyc
+*.txt
 test.py
 followers.txt
 following.txt

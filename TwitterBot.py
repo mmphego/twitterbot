@@ -19,12 +19,11 @@ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more de
 You should have received a copy of the GNU General Public License along with
 the Twitter Bot library. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import print_function
+
 import argparse
 import coloredlogs
 import csv
 import logging
-import moment
 import os
 import random
 import sys
@@ -211,7 +210,7 @@ class TwitterBot(loggingClass):
         try:
             subquery = self.username_lookup(user_id)
             for user in subquery:
-                if not user['protected']:
+                if not user['protected'] and user['followers_count'] > 500:
                     self.wait_to_confuse_twitter()
                     self.twitter_con.friendships.create(user_id=user_id, follow=_follow)
                     self.logger.info("followed @%s [id: %s]" % (user["screen_name"], user["id"]))
@@ -306,8 +305,12 @@ class TwitterBot(loggingClass):
                         "*" if user["verified"] else " ", user["screen_name"], user["id"]))
 
         with open(self.BOT_CONFIG["NON_FOLLOWERS_FILE"], 'w') as out_file:
-            for val in _non_followers:
-                out_file.write(str(val) + '\n')
+            if non_followers:
+                for val in non_followers:
+                    out_file.write(str(val) + '\n')
+            else:
+                for val in _non_followers:
+                    out_file.write(str(val) + '\n')
     # ----------------------------------
     def search_tweets(self, phrase, count=100, result_type="recent"):
         """
@@ -380,7 +383,7 @@ class TwitterBot(loggingClass):
         followers = self.get_followers_list()
         already_followed = self.get_do_not_follow_list()
         not_following_back = list(followers - following - already_followed)
-        for i in xrange(0, len(not_following_back), 99):
+        for i in range(0, len(not_following_back), 99):
             for user_id in not_following_back[i: i + 99]:
                 self.follow_user(user_id, True)
 
@@ -391,7 +394,7 @@ class TwitterBot(loggingClass):
         followers_of_user = set(self.twitter_con.followers.ids(
             screen_name=user_twitter_handle)["ids"])
         followers_of_user = list(followers_of_user)
-        for i in xrange(0, len(followers_of_user), 99):
+        for i in range(0, len(followers_of_user), 99):
             for user_id in followers_of_user[i: i + 99]:
                 self.follow_user(user_id, True)
 
@@ -405,6 +408,7 @@ class TwitterBot(loggingClass):
         followers = self.get_followers_list()
 
         not_following_back = list(following - followers)
+        print(len(not_following_back))
         # update the "already followed" file with users who didn't follow back
         already_followed = set(not_following_back)
         already_followed_list = []
@@ -466,8 +470,15 @@ class TwitterBot(loggingClass):
 
         for user_id in unfollow_users:
             self.unfollow_user(user_id)
+            user_id.pop(0)
     # ----------------------------------
     def send_tweet(self, message):
+        """
+            Posts a tweet.
+        """
+        return self.twitter_con.statuses.update(status=message)
+    # ----------------------------------
+    def send_tweet_to_non_followers(self, message=''):
         """
             Posts a tweet.
         """
@@ -538,34 +549,6 @@ class TwitterBot(loggingClass):
         if _deleted:
             self.logger.info('Number of deleted tweets: %s' % (count))
 
-    # def cleanup_my_twits(self, max_status_id=0):
-    #     """
-    #     """
-
-    #     _me = self.BOT_CONFIG.get('TWITTER_HANDLE')
-    #     timeline_args = {
-    #                         'screen_name': _me,
-    #                         'count': 200,
-    #                         'trim_user': 'true',
-    #                         'include_rts': 'true'
-    #                     }
-
-    #     if max_status_id != 0:
-    #         timeline_args['max_id'] = max_status_id
-
-
-    #     import IPython; globals().update(locals()); IPython.embed(header='Python Debugger')
-    #     get_mytwits = self.twitter_con.statuses.user_timeline(**timeline_args)
-
-    #     for twit in get_mytwits:
-    #         twit
-    #     time.strptime(created_at, "%a %b %d %H:%M:%S +0000 %Y")
-    #     tweet_date = '%s-%s-%s' % (tweet_date.tm_year, tweet_date.tm_mon, tweet_date.tm_mday)
-    #     tweet_date = moment(tweet_date, DATE_FORMAT)
-
-
-    #     all_my_tweets = set(twit.get('id') for twit in get_mytwits)
-    #     all_my_tweets = sorted(list(all_my_tweets))
 
 
 if __name__ == '__main__':
