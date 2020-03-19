@@ -1,8 +1,0 @@
-ipython
-ipdb
-pep8
-flake8
-pyflakes
-isort
-coloredlogs
-
