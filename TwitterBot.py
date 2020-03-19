@@ -575,7 +575,7 @@ class TwitterBot(loggingClass):
             except Exception as api_error:
                 self.logger.error("%s" % str(api_error))
 
-    def del_twits_to_date(self, to_date="2000-01-01", tweets_csv_file=None):
+    def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
         Open browser and go to https://twitter.com/settings/account
         Click: get your Your Twitter archive
@@ -587,7 +587,7 @@ class TwitterBot(loggingClass):
         tweet_csv_file: csv
             location where the file is stored
         """
-        self.logger.info("Deleting old tweets!!!")
+        self.logger.info(f"Deleting old tweets from {to_date}!!!")
         _deleted = False
         if tweets_csv_file is None:
             self.logger.error("Need a CSV file to continue")
@@ -595,7 +595,9 @@ class TwitterBot(loggingClass):
         try:
             time.strptime(to_date, "%Y-%m-%d")
         except Exception:
-            self.logger.error("Date must be in correct format!!")
+            self.logger.error(
+                "Date must be in correct format [expected format: YYYY-MM-DD]!!"
+            )
             return
 
         try:
@@ -603,8 +605,8 @@ class TwitterBot(loggingClass):
         except Exception:
             self.logger.error("File corrupted: retry")
             return
-        _deleted_twits = []
-        _tweet_id_ignore = []
+
+        deleted_tweets = []
         for count, row in enumerate(input_file, 1):
             tweet_timestamp = parse(
                 row.get("timestamp", "1999-01-01"), ignoretz=True
@@ -614,17 +616,14 @@ class TwitterBot(loggingClass):
                 try:
                     self.wait_to_confuse_twitter()
                     _state = self.twitter_con.statuses.destroy(id=tweet_id)
-                    self.logger.info(
-                        "Deleted tweet: %s: %s"
-                        % (tweet_timestamp, row.get("text", "").replace("\n", ""))
-                    )
-                    _deleted_twits.append(_state)
+                    row = row.get("text", "").replace("\n", "")
+                    self.logger.info(f"Deleted tweet: {tweet_timestamp}: {row}")
+                    deleted_tweets.append(_state)
                 except Exception as err:
                     self.logger.error("%s" % (str(err.response_data)))
-                _deleted = True
 
-        if _deleted:
-            self.logger.info("Number of deleted tweets: %s" % (count))
+        if deleted_tweets:
+            self.logger.info(f"Number of deleted tweets: {count}"))
 
 
 if __name__ == "__main__":
@@ -671,12 +670,15 @@ if __name__ == "__main__":
         help=" Unfollow everyone who hasn't followed you back.",
     )
     parser.add_argument(
-        "--to_date", type=str, help="Date to start deleting tweets from!!!",
-    )
-    parser.add_argument(
-        "--archive-file",
+        "--nuke-old-tweets",
         action="store",
-        help="Your Twitter archive csv file, https://twitter.com/settings/account and request your archive",
+        help=(
+            "Delete old tweets, you will be prompted for a date of which tweets will be "
+            "deleted from. Add your csv path as argument.\n"
+            "Note: You need to download your Twitter archive csv file, "
+            "which can be downloaded here: https://twitter.com/settings/account "
+            "follow the instructions to download."
+        ),
     )
     parser.add_argument(
         "--loglevel",
@@ -720,7 +722,8 @@ if __name__ == "__main__":
     if args.get("unfollow"):
         my_bot.auto_unfollow_nonfollowers(auto_sync=True)
 
-    if args.get("to_date") and args.get("archive_file"):
-        my_bot.del_twits_to_date(
-            to_date=args.get("to_date"), tweets_csv_file=args.get("archive_file")
+    if args.get("nuke_old_tweets"):
+        date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
+        my_bot.nuke_old_tweets(
+            to_date=date, tweets_csv_file=args.get("nuke_old_tweets")
         )
