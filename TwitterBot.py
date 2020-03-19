@@ -245,11 +245,11 @@ class TwitterBot(loggingClass):
             subquery = self.username_lookup(user_id)
             for user in subquery:
                 if not user["protected"] and user["followers_count"] > no_followers:
-                    self.wait_to_confuse_twitter()
                     self.twitter_con.friendships.create(user_id=user_id)
                     self.logger.info(
                         "Followed @%s [id: %s]" % (user["screen_name"], user["id"])
                     )
+                    self.wait_to_confuse_twitter()
         except Exception:
             self.logger.exception("Error occurred investigate")
 
