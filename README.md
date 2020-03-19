@@ -6,13 +6,9 @@
 
 # Twitter Bot
 
-[![Join the chat at https://gitter.im/rhiever/TwitterFollowBot](https://badges.gitter.im/rhiever/TwitterFollowBot.svg)](https://gitter.im/rhiever/TwitterFollowBot?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+A Python bot that automates several actions on Twitter, such as following and unfollowing users and deleting old tweets.
 
-A Python bot that automates several actions on Twitter, such as following users and favoriting tweets.
-
-## Notice: Repository is no longer being maintained
-
-Twitter has started cracking down heavily on users who use bots like this one to follow users or favorite tweets en masse. For that reason, I am no longer developing this code repository but will leave it up for anyone who wants to use it as a code base for future projects. Please respect the [software license](https://github.com/rhiever/TwitterFollowBot/blob/master/LICENSE) if you use the code from this repository.
+Note: This repository is mirrored from https://github.com/rhiever/TwitterFollowBot
 
 ## Disclaimer
 
