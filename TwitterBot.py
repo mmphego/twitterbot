@@ -625,10 +625,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(
             "A Python bot that automates several actions on "
-            "Twitter, such as following users and favoriting tweets."
+            "Twitter, such as following and unfollowing users."
         )
     )
-
     parser.add_argument(
         "-c",
         "--config",
@@ -637,9 +636,7 @@ if __name__ == "__main__":
         type=str,
         help="Config file which contains all required info.",
     )
-    parser.add_argument(
-        "--username", action="store_true", default=False, help="Get your username."
-    )
+
     parser.add_argument(
         "--sync",
         action="store_true",
@@ -652,19 +649,10 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
-        "--get-all-followers",
-        action="store_true",
-        default=False,
-        help="Get all followers, following, non-followers and already-followed",
-    )
-    parser.add_argument(
-        "--follow-user", action="store_true", default=False, help="follow a user",
-    )
-    parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
     )
     parser.add_argument(
-        "--auto-follow-back",
+        "--follow-back",
         action="store_true",
         default=False,
         help="Follows back everyone who's followed you.",
@@ -675,7 +663,6 @@ if __name__ == "__main__":
         default=False,
         help=" Unfollow everyone who hasn't followed you back.",
     )
-    parser.add_argument("--tweet", type=str, action="store", help="Posts a tweet.")
     parser.add_argument(
         "--to_date", type=str, help="Date to start deleting tweets from!!!",
     )
@@ -712,31 +699,19 @@ if __name__ == "__main__":
         sys.exit(1)
     my_bot = TwitterBot(args.get("config"))
 
-    if args.get("username"):
-        my_bot.who_am_i()
-
     if args.get("sync"):
         my_bot.sync_follows
 
-    if args.get("get_all_followers"):
-        my_bot.get_all_nonfollowers()
-        my_bot.get_do_not_follow_list()
-
-    if args.get("follow_user"):
-        my_bot.auto_follow_followers_of_user(args.get("follow_user"))
     if args.get("follow_by_hashtag"):
         my_bot.auto_follow_by_hashtag(
             phrase=args.get("follow_by_hashtag"), auto_sync=True
         )
 
-    if args.get("auto_follow_back"):
-        my_bot.auto_follow_followers()
+    if args.get("follow_back"):
+        my_bot.auto_follow_followers(auto_sync=True)
 
     if args.get("unfollow"):
-        my_bot.auto_unfollow_nonfollowers()
-
-    if args.get("tweet"):
-        my_bot.send_tweet(args.get("tweet"))
+        my_bot.auto_unfollow_nonfollowers(auto_sync=True)
 
     if args.get("to_date") and args.get("archive_file"):
         my_bot.del_twits_to_date(
