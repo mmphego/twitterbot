@@ -234,7 +234,7 @@ class TwitterBot(loggingClass):
                     out_file.write("%s\n" % (follow))
         self.logger.info("Done syncing data with Twitter")
 
-    def follow_user(self, user_id, no_followers=200):
+    def follow_user(self, user_id, no_followers=100):
         """
         Allows the user to follow the user specified in the ID parameter.
         Params: int
@@ -244,7 +244,14 @@ class TwitterBot(loggingClass):
         try:
             subquery = self.username_lookup(user_id)
             for user in subquery:
-                if not user["protected"] and user["followers_count"] > no_followers:
+                if user["followers_count"] > no_followers:
+                    self.logger.warning(
+                        f"User: {user['screen_name']!r} has less than "
+                        f"{no_followers} followers, might be spam!"
+                    )
+                    continue
+
+                if not user["protected"]:
                     self.twitter_con.friendships.create(user_id=user_id)
                     self.logger.info(
                         "Followed @%s [id: %s]" % (user["screen_name"], user["id"])
