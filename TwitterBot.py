@@ -623,7 +623,7 @@ class TwitterBot(loggingClass):
                     self.logger.error("%s" % (str(err.response_data)))
 
         if deleted_tweets:
-            self.logger.info(f"Number of deleted tweets: {count}"))
+            self.logger.info(f"Number of deleted tweets: {count}")
 
 
 if __name__ == "__main__":
