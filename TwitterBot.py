@@ -107,6 +107,9 @@ class TwitterBot:
         logger.info("Sync the user's followers (accounts following the user).")
         followers_ids = self.twitter.followers_ids()
         with open(self.default_settings["followers_file"], "w") as out_file:
+            logger.debug(
+                f"Writing followers to file: {self.default_settings['followers_file']}"
+            )
             for follower in followers_ids:
                 out_file.write(f"{follower}\n")
         self.wait()
@@ -114,6 +117,9 @@ class TwitterBot:
         # sync the user's follows (accounts the user is following)
         followings_ids = self.twitter.friends_ids()
         with open(self.default_settings["follows_file"], "w") as out_file:
+            logger.debug(
+                f"Writing followers to file: {self.default_settings['follows_file']}"
+            )
             for follow in followings_ids:
                 out_file.write(f"{follow}\n")
         logger.info("Done syncing data with Twitter to file")
@@ -128,17 +134,18 @@ class TwitterBot:
         try:
             subquery = self.username_lookup(user_id)
             for user in subquery:
-                if user["followers_count"] < no_followers:
+                if user.followers_count < no_followers:
                     logger.warning(
-                        f"User: {user['screen_name']!r} has less than "
+                        f"User: {user.screen_name!r} has less than "
                         f"{no_followers} followers, might be spam!"
                     )
                     continue
 
-                if not user["protected"]:
-                    self.twitter.friendships.create(user_id=user_id)
+                if not user.protected:
+                    self.twitter.create_friendship(user_id=user_id)
                     logger.info(
-                        "Followed @%s [id: %s]" % (user["screen_name"], user["id"])
+                        f"Followed @{user.screen_name}, followers:{user.followers_count}, "
+                        f"following:{user.friends_count}, ratio:{user.friends_count/float(user.followers_count)}"
                     )
                     self.wait()
         except Exception:
@@ -152,7 +159,7 @@ class TwitterBot:
         Returns: None
         """
         try:
-            self.twitter.friendships.destroy(user_id=user_id)
+            self.twitter.destroy_friendship(user_id=user_id)
             self.wait()
             subquery = self.username_lookup(user_id)
             for user in subquery:
@@ -164,6 +171,7 @@ class TwitterBot:
 
     def who_am_i(self):
         logger.info("Username is %s" % self.default_settings["twitter_handle"])
+        return self.default_settings["twitter_handle"]
 
     def username_lookup(self, user_id):
         """
@@ -173,7 +181,9 @@ class TwitterBot:
         Return: dict
             Dict with Users information
         """
-        return self.twitter.users.lookup(user_id=user_id)
+        return self.twitter.lookup_users(
+            user_ids=user_id if isinstance(user_id, list) else [user_id]
+        )
 
     # ----------------------------------
     def get_do_not_follow_list(self):
@@ -215,11 +225,11 @@ class TwitterBot:
         """
         logger.info("Getting everyone who hasn't followed you back.")
         if auto_sync:
-            self.sync_follows
+            self.sync_follows()
 
         following = self.get_follows_list()
         followers = self.get_followers_list()
-        logger.info("Followers: %s, Following: %s" % (len(followers), len(following)))
+        logger.info(f"Followers: {len(followers)}, Following: {len(following)}")
         not_following_back = list(following - followers)
         non_followers = []
         _non_followers = []
@@ -251,9 +261,7 @@ class TwitterBot:
         """
         Returns a list of tweets matching a phrase (hashtag, word, etc.).
         """
-        return self.twitter.search.tweets(
-            q=phrase, result_type=result_type, count=count
-        )
+        return self.twitter.search(q=phrase, result_type=result_type, count=count)
 
     # ----------------------------------
     def auto_fav_by_hashtag(self, phrase, count=100, result_type="recent"):
