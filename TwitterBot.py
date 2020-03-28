@@ -244,7 +244,7 @@ class TwitterBot(loggingClass):
         try:
             subquery = self.username_lookup(user_id)
             for user in subquery:
-                if user["followers_count"] > no_followers:
+                if user["followers_count"] < no_followers:
                     self.logger.warning(
                         f"User: {user['screen_name']!r} has less than "
                         f"{no_followers} followers, might be spam!"
@@ -623,7 +623,7 @@ class TwitterBot(loggingClass):
                     self.logger.error("%s" % (str(err.response_data)))
 
         if deleted_tweets:
-            self.logger.info(f"Number of deleted tweets: {count}"))
+            self.logger.info(f"Number of deleted tweets: {count}")
 
 
 if __name__ == "__main__":
