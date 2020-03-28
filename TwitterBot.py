@@ -124,30 +124,32 @@ class TwitterBot:
                 out_file.write(f"{follow}\n")
         logger.info("Done syncing data with Twitter to file")
 
-    def follow_user(self, user_id, no_followers=100):
-        """
-        Allows the user to follow the user specified in the ID parameter.
-        Params: int
-            The ID of the user to follow.
-        Returns: None
-        """
+    def follow_user(
+        self, user_id: int, no_followers: int = 100, followers_follow_ratio: int = 5
+    ) -> None:
+        """Allows the user to follow the user specified in the ID parameter."""
         try:
             subquery = self.username_lookup(user_id)
             for user in subquery:
+                ff_ratio = user.friends_count / float(user.followers_count)
                 if user.followers_count < no_followers:
                     logger.warning(
                         f"User: {user.screen_name!r} has less than "
                         f"{no_followers} followers, might be spam!"
                     )
                     continue
-
+                elif ff_ratio >= followers_follow_ratio:
+                    logger.warning(
+                        f"User: {user.screen_name!r}'s follow/followers ratio: {ff_ratio}"
+                    )
+                    continue
                 if not user.protected:
-                    self.twitter.create_friendship(user_id=user_id)
                     logger.info(
                         f"Followed @{user.screen_name}, followers:{user.followers_count}, "
                         f"following:{user.friends_count}, ratio:{user.friends_count/float(user.followers_count)}"
                     )
                     self.wait()
+                    self.twitter.create_friendship(user_id=user_id)
         except Exception:
             logger.exception("Error occurred investigate")
 
@@ -186,38 +188,29 @@ class TwitterBot:
         )
 
     # ----------------------------------
-    def get_do_not_follow_list(self):
-        """
-        Returns the set of users the bot has already followed in the past.
-        """
+    def get_do_not_follow_list(self) -> set:
+        """Returns the set of users the bot has already followed in the past."""
         logger.info("Getting all users I have already followed in the past.")
-        dnf_list = []
+        dnf_list = set()
         with open(self.default_settings["already_followed_file"], "r") as in_file:
-            for line in in_file:
-                dnf_list.append(int(line))
-        return set(dnf_list)
+            dnf_list.update(int(line) for line in in_file)
+        return dnf_list
 
-    def get_followers_list(self):
-        """
-        Returns the set of users that are currently following the user.
-        """
+    def get_followers_list(self) -> set:
+        """Returns the set of users that are currently following the user."""
         logger.info("Getting all followers.")
-        followers_list = []
+        followers_list = set()
         with open(self.default_settings["followers_file"], "r") as in_file:
-            for line in in_file:
-                followers_list.append(int(line))
-        return set(followers_list)
+            followers_list.update(int(line) for line in in_file)
+        return followers_list
 
-    def get_follows_list(self):
-        """
-        Returns the set of users that the user is currently following.
-        """
+    def get_follows_list(self) -> set:
+        """Returns the set of users that the user is currently following."""
         logger.info("Getting all users I follow")
-        follows_list = []
+        follows_list = set()
         with open(self.default_settings["follows_file"], "r") as in_file:
-            for line in in_file:
-                follows_list.append(int(line))
-        return set(follows_list)
+            follows_list.update(int(line) for line in in_file)
+        return follows_list
 
     def get_all_nonfollowers(self, get_name=False, auto_sync=False):
         """
@@ -314,7 +307,7 @@ class TwitterBot:
         Follows anyone who tweets about a phrase (hashtag, word, etc.).
         """
         if auto_sync:
-            self.sync_follows
+            self.sync_follows()
         result = self.search_tweets(phrase, count, result_type)
         statuses = [
             i
@@ -341,7 +334,7 @@ class TwitterBot:
         Follows back everyone who's followed you.
         """
         if auto_sync:
-            self.sync_follows
+            self.sync_follows()
         following = self.get_follows_list()
         followers = self.get_followers_list()
         already_followed = self.get_do_not_follow_list()
@@ -368,7 +361,7 @@ class TwitterBot:
         Unfollows everyone who hasn't followed you back.
         """
         if auto_sync:
-            self.sync_follows
+            self.sync_follows()
         following = self.get_follows_list()
         followers = self.get_followers_list()
 
