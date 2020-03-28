@@ -25,14 +25,27 @@ import os
 import random
 import sys
 import time
+import pathlib
 
 from twitter import Twitter
 from twitter import OAuth
 from dateutil.parser import parse
 from loguru import logger
 
+from settings import ConfigSettings
+
 # Used for random timers
 random.seed()
+
+
+def initialize_bot(config_dir=".tweeterbot"):
+    logger.info("Initializing TweeterBot...")
+    config_path = pathlib.Path.home().joinpath(config_dir)
+    if not config_path.exists():
+        config_path.mkdir()
+    filename = config_path.joinpath("config.ini")
+    return ConfigSettings(filename)
+
 
 class TwitterBot:
     """
@@ -42,11 +55,11 @@ class TwitterBot:
 
     def __init__(self, config_file="config.txt"):
         # this variable contains the configuration for the bot
+        default_settings = initialize_bot().default_settings
         self.BOT_CONFIG = {}
         # this variable contains the authorized connection to the Twitter API
         self.twitter = None
         self.bot_setup(config_file)
-
 
     def bot_setup(self, config_file="config.txt"):
         """
@@ -486,9 +499,9 @@ class TwitterBot:
         """
         following = self.get_follows_list()
         muted = set(
-            self.twitter.mutes.users.ids(
-                screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
-            )["ids"]
+            self.twitter.mutes.users.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])[
+                "ids"
+            ]
         )
 
         not_muted = following - muted
@@ -503,9 +516,9 @@ class TwitterBot:
         Unmutes everyone that you have muted.
         """
         muted = set(
-            self.twitter.mutes.users.ids(
-                screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
-            )["ids"]
+            self.twitter.mutes.users.ids(screen_name=self.BOT_CONFIG["TWITTER_HANDLE"])[
+                "ids"
+            ]
         )
 
         for user_id in muted:
@@ -623,7 +636,7 @@ if __name__ == "__main__":
         "-c",
         "--config",
         default="config.txt",
-        required=True,
+        # required=True,
         type=str,
         help="Config file which contains all required info.",
     )
