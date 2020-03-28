@@ -58,7 +58,10 @@ class ConfigSettings:
         txt_files = list(self.filename.parent.glob("*.txt"))
         for key in self.default_settings:
             if (
-                isinstance(self.default_settings[key], pathlib.PosixPath)
+                ".txt" in self.default_settings[key]
                 and self.default_settings[key] not in txt_files
             ):
-                self.default_settings[key].touch()
+                try:
+                    self.default_settings[key].touch()
+                except AttributeError:
+                    pathlib.Path(self.default_settings[key]).touch()
