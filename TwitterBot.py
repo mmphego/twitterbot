@@ -31,6 +31,8 @@ from twitter import OAuth
 from dateutil.parser import parse
 from loguru import logger
 
+# Used for random timers
+random.seed()
 
 class TwitterBot:
     """
@@ -42,10 +44,9 @@ class TwitterBot:
         # this variable contains the configuration for the bot
         self.BOT_CONFIG = {}
         # this variable contains the authorized connection to the Twitter API
-        self.twitter_con = None
+        self.twitter = None
         self.bot_setup(config_file)
-        # Used for random timers
-        random.seed()
+
 
     def bot_setup(self, config_file="config.txt"):
         """
@@ -132,7 +133,7 @@ class TwitterBot:
             )
 
         # create an authorized connection to the Twitter API
-        self.twitter_con = Twitter(
+        self.twitter = Twitter(
             auth=OAuth(
                 self.BOT_CONFIG["OAUTH_TOKEN"],
                 self.BOT_CONFIG["OAUTH_SECRET"],
@@ -176,7 +177,7 @@ class TwitterBot:
         bot to get rate limited by the Twitter API.
         """
         logger.info("Sync the user's followers (accounts following the user).")
-        followers_status = self.twitter_con.followers.ids(
+        followers_status = self.twitter.followers.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
         )
         followers = set(followers_status["ids"])
@@ -187,7 +188,7 @@ class TwitterBot:
                 out_file.write("%s\n" % (follower))
 
         while next_cursor != 0:
-            followers_status = self.twitter_con.followers.ids(
+            followers_status = self.twitter.followers.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor
             )
             followers = set(followers_status["ids"])
@@ -198,7 +199,7 @@ class TwitterBot:
                     out_file.write("%s\n" % (follower))
 
         # sync the user's follows (accounts the user is following)
-        following_status = self.twitter_con.friends.ids(
+        following_status = self.twitter.friends.ids(
             screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
         )
         following = set(following_status["ids"])
@@ -209,7 +210,7 @@ class TwitterBot:
                 out_file.write("%s\n" % (follow))
 
         while next_cursor != 0:
-            following_status = self.twitter_con.friends.ids(
+            following_status = self.twitter.friends.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"], cursor=next_cursor
             )
             following = set(following_status["ids"])
@@ -238,7 +239,7 @@ class TwitterBot:
                     continue
 
                 if not user["protected"]:
-                    self.twitter_con.friendships.create(user_id=user_id)
+                    self.twitter.friendships.create(user_id=user_id)
                     logger.info(
                         "Followed @%s [id: %s]" % (user["screen_name"], user["id"])
                     )
@@ -254,7 +255,7 @@ class TwitterBot:
         Returns: None
         """
         try:
-            self.twitter_con.friendships.destroy(user_id=user_id)
+            self.twitter.friendships.destroy(user_id=user_id)
             self.wait_to_confuse_twitter()
             subquery = self.username_lookup(user_id)
             for user in subquery:
@@ -275,7 +276,7 @@ class TwitterBot:
         Return: dict
             Dict with Users information
         """
-        return self.twitter_con.users.lookup(user_id=user_id)
+        return self.twitter.users.lookup(user_id=user_id)
 
     # ----------------------------------
     def get_do_not_follow_list(self):
@@ -353,7 +354,7 @@ class TwitterBot:
         """
         Returns a list of tweets matching a phrase (hashtag, word, etc.).
         """
-        return self.twitter_con.search.tweets(
+        return self.twitter.search.tweets(
             q=phrase, result_type=result_type, count=count
         )
 
@@ -369,7 +370,7 @@ class TwitterBot:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
                 self.wait_to_confuse_twitter()
-                result = self.twitter_con.favorites.create(_id=tweet["id"])
+                result = self.twitter.favorites.create(_id=tweet["id"])
                 logger.info("Favourite: %s" % (result["text"].encode("utf-8")))
             # when you have already favorited a tweet, this error is thrown
             except Exception as api_error:
@@ -388,7 +389,7 @@ class TwitterBot:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
                 self.wait_to_confuse_twitter()
-                result = self.twitter_con.statuses.retweet(id=tweet["id"])
+                result = self.twitter.statuses.retweet(id=tweet["id"])
                 logger.info("Retweeted: %s" % (result["text"].encode("utf-8")))
             # when you have already retweeted a tweet, this error is thrown
             except Exception as api_error:
@@ -444,7 +445,7 @@ class TwitterBot:
         Follows the followers of a specified user.
         """
         followers_of_user = set(
-            self.twitter_con.followers.ids(screen_name=user_twitter_handle)["ids"]
+            self.twitter.followers.ids(screen_name=user_twitter_handle)["ids"]
         )
         followers_of_user = list(followers_of_user)
         for i in range(0, len(followers_of_user), 99):
@@ -485,7 +486,7 @@ class TwitterBot:
         """
         following = self.get_follows_list()
         muted = set(
-            self.twitter_con.mutes.users.ids(
+            self.twitter.mutes.users.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
             )["ids"]
         )
@@ -494,7 +495,7 @@ class TwitterBot:
 
         for user_id in not_muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_UNMUTED"]:
-                self.twitter_con.mutes.users.create(user_id=user_id)
+                self.twitter.mutes.users.create(user_id=user_id)
                 logger.info("Muted %d" % (user_id))
 
     def auto_unmute(self):
@@ -502,14 +503,14 @@ class TwitterBot:
         Unmutes everyone that you have muted.
         """
         muted = set(
-            self.twitter_con.mutes.users.ids(
+            self.twitter.mutes.users.ids(
                 screen_name=self.BOT_CONFIG["TWITTER_HANDLE"]
             )["ids"]
         )
 
         for user_id in muted:
             if user_id not in self.BOT_CONFIG["USERS_KEEP_MUTED"]:
-                self.twitter_con.mutes.users.destroy(user_id=user_id)
+                self.twitter.mutes.users.destroy(user_id=user_id)
                 logger.info("Unmuted %d" % (user_id))
 
     # ----------------------------------
@@ -536,7 +537,7 @@ class TwitterBot:
         """
         Posts a tweet.
         """
-        return self.twitter_con.statuses.update(status=message)
+        return self.twitter.statuses.update(status=message)
 
     def auto_add_to_list(self, phrase, list_slug, count=100, result_type="recent"):
         """
@@ -547,7 +548,7 @@ class TwitterBot:
             try:
                 if tweet["user"]["screen_name"] == self.BOT_CONFIG["TWITTER_HANDLE"]:
                     continue
-                result = self.twitter_con.lists.members.create(
+                result = self.twitter.lists.members.create(
                     owner_screen_name=self.BOT_CONFIG["TWITTER_HANDLE"],
                     slug=list_slug,
                     screen_name=tweet["user"]["screen_name"],
@@ -599,7 +600,7 @@ class TwitterBot:
             if to_date != "" and tweet_timestamp < parse(to_date).date():
                 try:
                     self.wait_to_confuse_twitter()
-                    _state = self.twitter_con.statuses.destroy(id=tweet_id)
+                    _state = self.twitter.statuses.destroy(id=tweet_id)
                     row = row.get("text", "").replace("\n", "")
                     logger.info(f"Deleted tweet: {tweet_timestamp}: {row}")
                     deleted_tweets.append(_state)
