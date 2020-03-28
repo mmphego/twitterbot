@@ -14,7 +14,7 @@ class ConfigSettings:
                 "api_secret": pathlib.os.getenv("API_SECRET"),
                 "access_token_key": pathlib.os.getenv("ACCESS_TOKEN_KEY"),
                 "access_token_secret": pathlib.os.getenv("ACCESS_TOKEN_SECRET"),
-                "username": pathlib.os.getenv("TWEETER_USERNAME"),
+                "twitter_handle": pathlib.os.getenv("TWITTER_HANDLE"),
                 "already_followed_file": self.filename.parent.joinpath(
                     "already_followed.txt"
                 ),
@@ -48,10 +48,11 @@ class ConfigSettings:
     def create_config(self):
         logger.info("Creating the tweeterbot config file.")
         for key in self.default_settings:
-            value = None
-            while not value:
-                value = str(input(f"Enter Twitter {key.lower()}: "))
-            self.default_settings[key] = value
+            if not isinstance(self.default_settings[key], pathlib.PosixPath):
+                value = None
+                while not value:
+                    value = str(input(f"Enter Twitter {key.lower()}: "))
+                self.default_settings[key] = value
 
     def check_files_lookup(self):
         txt_files = list(self.filename.parent.glob("*.txt"))
