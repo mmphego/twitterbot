@@ -148,9 +148,11 @@ class TwitterBot:
                     f"following:{user_obj.user.friends_count}, ratio:{ff_ratio}"
                 )
                 self.wait()
-                self.twitter.create_friendship(user_id=user_obj.user.id)
+                result = self.twitter.create_friendship(user_id=user_obj.user.id)
         except Exception:
             logger.exception("Error occurred investigate")
+        else:
+            return result
 
     def unfollow_user(self, user_id):
         """
@@ -300,7 +302,12 @@ class TwitterBot:
                 logger.error("Error: %s" % (str(api_error)))
 
     def auto_follow_by_hashtag(
-        self, phrase, count=200, auto_sync=False, result_type="recent"
+        self,
+        phrase: str,
+        friends_count: int = 300,
+        count: int = 200,
+        auto_sync: bool = False,
+        result_type: str = "recent",
     ):
         """
         Follows anyone who tweets about a phrase (hashtag, word, etc.).
@@ -312,18 +319,15 @@ class TwitterBot:
             i
             for i in result
             if i.user.screen_name != self.default_settings.get("TWITTER_HANDLE")
-            and not i.user.following
-            and not i.user.protected
+            and not (i.user.protected and i.user.following)
             and i.user.profile_image_url
-            and i.user.friends_count > 300
+            and i.user.friends_count > friends_count
         ]
         random.shuffle(statuses)
-        following = self.get_follows_list()
         logger.info(f"Following {len(statuses)} users.")
         for tweet in statuses:
             try:
                 self.follow_user(tweet)
-                following.update(tweet.user.id)
             except Exception as exc:
                 # quit on rate limit errors
                 logger.error(f"Error: {str(exc)}")
