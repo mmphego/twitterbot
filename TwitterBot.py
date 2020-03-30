@@ -125,31 +125,30 @@ class TwitterBot:
         logger.info("Done syncing data with Twitter to file")
 
     def follow_user(
-        self, user_id: int, no_followers: int = 100, followers_follow_ratio: int = 5
+        self,
+        user_obj: object,
+        no_followers: int = 100,
+        followers_follow_ratio: int = 5,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
+        ff_ratio = user_obj.user.friends_count / float(user_obj.user.followers_count)
         try:
-            subquery = self.username_lookup(user_id)
-            for user in subquery:
-                ff_ratio = user.friends_count / float(user.followers_count)
-                if user.followers_count < no_followers:
-                    logger.warning(
-                        f"User: {user.screen_name!r} has less than "
-                        f"{no_followers} followers, might be spam!"
-                    )
-                    continue
-                elif ff_ratio >= followers_follow_ratio:
-                    logger.warning(
-                        f"User: {user.screen_name!r}'s follow/followers ratio: {ff_ratio}"
-                    )
-                    continue
-                if not user.protected:
-                    logger.info(
-                        f"Followed @{user.screen_name}, followers:{user.followers_count}, "
-                        f"following:{user.friends_count}, ratio:{user.friends_count/float(user.followers_count)}"
-                    )
-                    self.wait()
-                    self.twitter.create_friendship(user_id=user_id)
+            if user_obj.user.followers_count < no_followers:
+                logger.warning(
+                    f"User: {user_obj.user.screen_name!r} has less than "
+                    f"{no_followers} followers, might be spam!"
+                )
+            elif ff_ratio >= followers_follow_ratio:
+                logger.warning(
+                    f"User: {user_obj.user.screen_name!r}'s follow/followers ratio: {ff_ratio}"
+                )
+            if not (user_obj.user.protected and user_obj.user.following):
+                logger.info(
+                    f"Followed @{user_obj.user.screen_name}, followers:{user_obj.user.followers_count}, "
+                    f"following:{user_obj.user.friends_count}, ratio:{ff_ratio}"
+                )
+                self.wait()
+                self.twitter.create_friendship(user_id=user_obj.user.id)
         except Exception:
             logger.exception("Error occurred investigate")
 
@@ -311,23 +310,23 @@ class TwitterBot:
         result = self.search_tweets(phrase, count, result_type)
         statuses = [
             i
-            for i in result["statuses"]
-            if i["user"]["screen_name"] != self.default_settings.get("TWITTER_HANDLE")
-            and not i["user"]["following"]
-            and not i["user"]["protected"]
-            and i["user"]["profile_image_url"]
-            and i["user"]["friends_count"] > 300
+            for i in result
+            if i.user.screen_name != self.default_settings.get("TWITTER_HANDLE")
+            and not i.user.following
+            and not i.user.protected
+            and i.user.profile_image_url
+            and i.user.friends_count > 300
         ]
         random.shuffle(statuses)
         following = self.get_follows_list()
         logger.info(f"Following {len(statuses)} users.")
         for tweet in statuses:
             try:
-                self.follow_user(tweet["user"]["id"])
-                following.update(set([tweet["user"]["id"]]))
-            except Exception:
+                self.follow_user(tweet)
+                following.update(tweet.user.id)
+            except Exception as exc:
                 # quit on rate limit errors
-                logger.error("Error: %s" % (str(api_error)))
+                logger.error(f"Error: {str(exc)}")
 
     def auto_follow_followers(self, auto_sync=False):
         """
