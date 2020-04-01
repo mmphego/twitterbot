@@ -156,23 +156,36 @@ class TwitterBot:
         else:
             return result
 
-    def unfollow_user(self, user_id):
-        """
-        Allows the user to unfollow the user specified in the ID parameter.
-        Params: int
-            The ID of the user to follow.
-        Returns: None
-        """
+    @staticmethod
+    def user_stats(user: object):
+        result = ""
+        if hasattr(user, "screen_name"):
+            result += f"{user.screen_name}, "
+        if hasattr(user, "followers_count"):
+            result += f"Followers: {user.followers_count}, "
+        if hasattr(user, "friends_count"):
+            result += f"Following: {user.friends_count}, "
+        if hasattr(user, "id"):
+            result += f"[id: {user.id}]"
+
+        return result
+
+    def unfollow_user(self, user_id: int, unfollow_verified: bool = False):
+        """Allows the user to unfollow the user specified in the ID parameter."""
         try:
-            self.twitter.destroy_friendship(user_id=user_id)
+            results = self.username_lookup(user_id)
+            for result in results:
+                if result.verified != unfollow_verified:
+                    logger.warning(
+                        f"@{result.screen_name} is verified, therefore will not unfollow."
+                    )
+                    return
+
             self.wait()
-            subquery = self.username_lookup(user_id)
-            for user in subquery:
-                logger.info(
-                    "Unfollowed @%s [id: %s]" % (user["screen_name"], user["id"])
-                )
-        except Exception as api_error:
-            logger.error("Error: %s" % str(api_error))
+            result = self.twitter.destroy_friendship(user_id=user_id)
+            logger.info(f"Unfollowed @{self.user_stats(result)}")
+        except Exception:
+            logger.exception("Error occurred, investigate")
 
     def who_am_i(self):
         logger.info("Username is %s" % self.default_settings["twitter_handle"])
@@ -361,7 +374,9 @@ class TwitterBot:
             for user_id in followers_of_user[i : i + 99]:
                 self.follow_user(user_id)
 
-    def auto_unfollow_nonfollowers(self, auto_sync=False):
+    def auto_unfollow_nonfollowers(
+        self, auto_sync: bool, unfollow_verified: bool,
+    ):
         """
         Unfollows everyone who hasn't followed you back.
         """
@@ -371,7 +386,6 @@ class TwitterBot:
         followers = self.get_followers_list()
 
         not_following_back = list(following - followers)
-        print(len(not_following_back))
         # update the "already followed" file with users who didn't follow back
         already_followed = set(not_following_back)
         already_followed_list = []
@@ -383,11 +397,10 @@ class TwitterBot:
 
         with open(self.default_settings["already_followed_file"], "w") as out_file:
             for val in already_followed:
-                out_file.write(str(val) + "\n")
+                out_file.write(f"{val}\n")
 
-        for user_id in not_following_back:
-            if user_id not in self.default_settings["users_keep_following"]:
-                self.unfollow_user(user_id)
+        for user_id in sorted(not_following_back):
+            self.unfollow_user(user_id, unfollow_verified)
 
     def auto_mute_following(self):
         """
@@ -612,7 +625,7 @@ if __name__ == "__main__":
         tweeter_bot.auto_follow_followers(auto_sync=True)
 
     if args.get("unfollow"):
-        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True)
+        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
 
     if args.get("nuke_old_tweets"):
         date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
