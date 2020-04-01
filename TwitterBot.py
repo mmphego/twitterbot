@@ -138,10 +138,12 @@ class TwitterBot:
                     f"User: {user_obj.user.screen_name!r} has less than "
                     f"{no_followers} followers, might be spam!"
                 )
+                return
             elif ff_ratio >= followers_follow_ratio:
                 logger.warning(
                     f"User: {user_obj.user.screen_name!r}'s follow/followers ratio: {ff_ratio}"
                 )
+                return
             if not (user_obj.user.protected and user_obj.user.following):
                 logger.info(
                     f"Followed @{user_obj.user.screen_name}, followers:{user_obj.user.followers_count}, "
