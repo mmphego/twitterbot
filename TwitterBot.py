@@ -165,6 +165,9 @@ class TwitterBot:
             result += f"Followers: {user.followers_count}, "
         if hasattr(user, "friends_count"):
             result += f"Following: {user.friends_count}, "
+        if hasattr(user, "friends_count") and hasattr(user, "followers_count"):
+            ff_ratio = user.friends_count / float(user.followers_count)
+            result += f"FF_Ratio: {ff_ratio}, "
         if hasattr(user, "id"):
             result += f"[id: {user.id}]"
 
