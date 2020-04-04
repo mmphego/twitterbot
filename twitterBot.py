@@ -20,7 +20,6 @@ the Twitter Bot library. If not, see http://www.gnu.org/licenses/.
 
 import argparse
 import csv
-import os
 import random
 import sys
 import time
@@ -30,6 +29,7 @@ import tweepy
 
 from collections import defaultdict
 from dateutil.parser import parse
+
 from loguru import logger as _loguru_logger
 
 from settings import ConfigSettings
@@ -59,6 +59,10 @@ def logger(loglevel):
         return _loguru_logger
 
 
+def file_last_mod(file: str) -> int:
+    return pathlib.os.path.getmtime(file)
+
+
 class TwitterBot:
     """
     Bot that automates several actions on Twitter, such as following users and favoriting tweets.
@@ -76,11 +80,10 @@ class TwitterBot:
         """Reads in the bot configuration file and sets up the bot."""
         # check how old the follower sync files are and recommend updating them
         # if they are old
+        cur_time = time.time()
         if (
-            time.time() - os.path.getmtime(self.default_settings["follows_file"])
-            > 86400
-            or time.time() - os.path.getmtime(self.default_settings["followers_file"])
-            > 86400
+            cur_time - file_last_mod(self.default_settings["follows_file"]) > 86400
+            or cur_time - file_last_mod(self.default_settings["followers_file"]) > 86400
         ):
             self.logger.warning(
                 "Your Twitter follower sync files are more than a day old. "
@@ -115,7 +118,6 @@ class TwitterBot:
             config_path.mkdir()
         filename = config_path.joinpath("config.ini")
         settings = ConfigSettings(filename)
-
         return settings.default_settings
 
     def sync_follows(self):
@@ -129,6 +131,10 @@ class TwitterBot:
         Do not run this method too often, however, or it will quickly cause your
         bot to get rate limited by the Twitter API.
         """
+        last_mod = file_last_mod(self.default_settings["followers_file"])
+        if time.time() - last_mod < 100:
+            return
+
         self.logger.info("Sync the user's followers (accounts following the user).")
         followers_ids = self.twitter.followers_ids()
         with open(self.default_settings["followers_file"], "w") as out_file:
@@ -150,29 +156,57 @@ class TwitterBot:
         self.logger.info("Done syncing data with Twitter to file")
 
     def follow_user(
-        self, user_obj: object, n_followers: int = 100, followers_follow_ratio: int = 5,
+        self,
+        user_obj: object,
+        n_followers: int = 100,
+        followers_follow_ratio: int = 5,
+        n_tweets: int = 100,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
-        ff_ratio = user_obj.user.friends_count / float(user_obj.user.followers_count)
+        if not hasattr(user_obj, "screen_name"):
+            user_obj = user_obj.user
+
         try:
-            if user_obj.user.followers_count < n_followers:
+            ff_ratio = user_obj.friends_count / float(user_obj.followers_count)
+        except Exception:
+            return
+        import IPython; globals().update(locals()); IPython.embed(header='Python Debugger')
+        inv_followers_follow_ratio = 1 / followers_follow_ratio * 10
+        try:
+            if user_obj.followers_count < n_followers:
                 self.logger.warning(
-                    f"User: {user_obj.user.screen_name!r} has less than "
+                    f"User: {user_obj.screen_name!r} has less than "
                     f"{n_followers} followers, might be spam!"
                 )
+                self.ignore_user(user_obj)
                 return
-            elif ff_ratio >= followers_follow_ratio:
+
+            elif inv_followers_follow_ratio <= ff_ratio >= followers_follow_ratio:
                 self.logger.warning(
                     f"Non-follow back user: {self.user_stats(user_obj)}"
                 )
+                self.ignore_user(user_obj)
                 return
-            if not (user_obj.user.protected and user_obj.user.following):
-                self.logger.info(
-                    f"Followed @{user_obj.user.screen_name}, followers:{user_obj.user.followers_count}, "
-                    f"following:{user_obj.user.friends_count}, ratio:{ff_ratio}"
-                )
+
+            elif user_obj.statuses_count < n_tweets:
+                self.logger.warning(f"Ghost user: {self.user_stats(user_obj)}")
+                self.ignore_user(user_obj)
+                return
+
+            elif user_obj.protected:
+                self.logger.warning(f"Protected user: {self.user_stats(user_obj)}")
+                self.ignore_user(user_obj)
+                return
+
+            elif user_obj.following:
+                self.logger.warning(f"Already following {self.user_stats(user_obj)}")
+                self.ignore_user(user_obj)
+                return
+
+            else:
+                self.logger.info(f"Followed @{self.user_stats(user_obj)}")
                 self.wait()
-                result = self.twitter.create_friendship(user_id=user_obj.user.id)
+                result = self.twitter.create_friendship(user_id=user_obj.id)
         except Exception:
             self.logger.exception("Error occurred investigate")
         else:
@@ -195,6 +229,9 @@ class TwitterBot:
             result += f"[id: {user.id}]"
 
         return result
+
+    def ignore_user(self, user_obj:object):
+        pass
 
     def unfollow_user(self, user_id: int, unfollow_verified: bool = False):
         """Allows the user to unfollow the user specified in the ID parameter."""
@@ -279,6 +316,7 @@ class TwitterBot:
             and not i.user.following
             and i.user.profile_image_url
             and i.user.friends_count > friends_count
+            and i.user.statuses_count > count
         ]
 
         self.logger.info(f"Following {len(statuses)} users.")
@@ -296,11 +334,13 @@ class TwitterBot:
         following = self.get_follows_list()
         followers = self.get_followers_list()
         already_followed = self.get_do_not_follow_list()
-        not_following_back = list(followers - following - already_followed)
+        not_following_back = self.username_lookup(
+            list(followers - following - already_followed)
+        )
         self.logger.info(f"Following {len(not_following_back)} users.")
         for i in range(0, len(not_following_back), 99):
-            for user_id in not_following_back[i : i + 99]:
-                self.follow_user(user_id)
+            for user_obj in not_following_back[i : i + 99]:
+                self.follow_user(user_obj)
 
     def auto_follow_followers_of_user(self, user_twitter_handle):
         """Follows the followers of a specified user."""
