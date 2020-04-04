@@ -263,6 +263,9 @@ class TwitterBot:
             elif user_obj.protected != unfollow_protected:
                 self.ignore_user(user_obj)
                 return
+            elif not user_obj.following:
+                self.ignore_user(user_obj)
+                return
             else:
                 self.wait()
                 result = self.twitter.destroy_friendship(user_id=user_obj.id)
@@ -391,7 +394,7 @@ class TwitterBot:
             return
 
         # update the "already followed" file with users who didn't follow back
-        with open(self.default_settings["already_followed_file"], "a") as out_file:
+        with open(self.default_settings["already_followed_file"], "w") as out_file:
             for val in not_following_back:
                 out_file.write(f"{val}\n")
 
