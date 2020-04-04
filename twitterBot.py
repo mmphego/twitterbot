@@ -118,7 +118,7 @@ class TwitterBot:
         return wait_time
 
     def initialize_bot(self, config_dir=".tweeterbot") -> dict:
-        self.logger.info("Initializing TweeterBot...")
+        self.logger.debug("Initializing TweeterBot...")
         config_path = pathlib.Path.home().joinpath(config_dir)
         if not config_path.exists():
             config_path.mkdir()
