@@ -270,6 +270,10 @@ class TwitterBot:
         dnf_list = set()
         with open(self.default_settings["already_followed_file"], "r") as in_file:
             dnf_list.update(int(line) for line in in_file)
+
+        with open(self.default_settings["non_following_file"], "r") as in_file:
+            dnf_list.update(int(line) for line in in_file)
+
         return dnf_list
 
     def get_followers_list(self) -> set:
@@ -338,9 +342,13 @@ class TwitterBot:
         following = self.get_follows_list()
         followers = self.get_followers_list()
         already_followed = self.get_do_not_follow_list()
-        not_following_back = self.username_lookup(
-            list(followers - following - already_followed)
-        )
+        not_following_back = list(followers - following - already_followed)
+
+        if not not_following_back:
+            self.logger.warning("No-one to follow.")
+            return
+
+        not_following_back = self.username_lookup(not_following_back)
         self.logger.info(f"Following {len(not_following_back)} users.")
         for i in range(0, len(not_following_back), 99):
             for user_obj in not_following_back[i : i + 99]:
