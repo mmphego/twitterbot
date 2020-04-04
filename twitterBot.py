@@ -27,6 +27,8 @@ import time
 import pathlib
 
 import tweepy
+
+from collections import defaultdict
 from dateutil.parser import parse
 from loguru import logger as _loguru_logger
 
@@ -150,21 +152,21 @@ class TwitterBot:
     def follow_user(
         self,
         user_obj: object,
-        no_followers: int = 100,
+        n_followers: int = 100,
         followers_follow_ratio: int = 5,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
         ff_ratio = user_obj.user.friends_count / float(user_obj.user.followers_count)
         try:
-            if user_obj.user.followers_count < no_followers:
+            if user_obj.user.followers_count < n_followers:
                 self.logger.warning(
                     f"User: {user_obj.user.screen_name!r} has less than "
-                    f"{no_followers} followers, might be spam!"
+                    f"{n_followers} followers, might be spam!"
                 )
                 return
             elif ff_ratio >= followers_follow_ratio:
                 self.logger.warning(
-                    f"User: {user_obj.user.screen_name!r}'s follow/followers ratio: {ff_ratio}"
+                    f"Non-follow back user: {self.user_stats(user_obj)}"
                 )
                 return
             if not (user_obj.user.protected and user_obj.user.following):
@@ -353,17 +355,25 @@ class TwitterBot:
         """Follows anyone who tweets about a phrase (hashtag, word, etc.)."""
         if auto_sync:
             self.sync_follows()
-        result = self.search_tweets(phrase, count, result_type)
+        results = self.search_tweets(phrase, count, result_type)
+
+        screen_names_set = set(i.user.screen_name for i in results)
+
+        users_dict = defaultdict(list)
+        for result in results:
+            if result.user.screen_name in screen_names_set:
+                users_dict[result.user.screen_name] = result
+
         statuses = [
             i
-            for i in result
+            for i in users_dict.values()
             if i.user.screen_name != self.default_settings.get("TWITTER_HANDLE")
             and not i.user.protected
             and not i.user.following
             and i.user.profile_image_url
             and i.user.friends_count > friends_count
         ]
-        random.shuffle(statuses)
+
         self.logger.info(f"Following {len(statuses)} users.")
         for tweet in statuses:
             try:
