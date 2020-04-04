@@ -123,7 +123,7 @@ class TwitterBot:
         if not config_path.exists():
             config_path.mkdir()
         filename = config_path.joinpath("config.ini")
-        settings = ConfigSettings(filename)
+        settings = ConfigSettings(filename, self.logger)
         return settings.default_settings
 
     def sync_follows(self):

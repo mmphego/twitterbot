@@ -6,8 +6,9 @@ from loguru import logger
 
 
 class ConfigSettings:
-    def __init__(self, filename):
+    def __init__(self, filename, Logger=logger):
         self.filename = filename
+        self.logger = Logger
         self.default_settings = OrderedDict(
             {
                 "api_key": pathlib.os.getenv("API_KEY"),
@@ -49,7 +50,14 @@ class ConfigSettings:
         self.check_files_lookup()
 
     def create_config(self):
-        logger.info("Creating the tweeterbot config file.")
+        self.logger.info("Creating the tweeterbot config file.")
+        msg = (
+            "You will need Twitter credentials, apply to become a Twitter developer here:"
+            "https://developer.twitter.com/. This does require that you have a Twitter "
+            "account. The application will ask various questions about what sort of work "
+            "you want to do."
+        )
+        self.logger.info(msg)
         for key in self.default_settings:
             if not isinstance(self.default_settings[key], pathlib.PosixPath):
                 value = None
