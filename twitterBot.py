@@ -300,50 +300,6 @@ class TwitterBot:
         """
         return self.twitter.search(q=phrase, result_type=result_type, count=count)
 
-    # ----------------------------------
-    def auto_fav_by_hashtag(self, phrase, count=100, result_type="recent"):
-        """
-        Favourites tweets that match a phrase (hashtag, word, etc.).
-        """
-        result = self.search_tweets(phrase, count, result_type)
-        for tweet in result["statuses"]:
-            try:
-                # don't favorite your own tweets
-                if (
-                    tweet["user"]["screen_name"]
-                    == self.default_settings["twitter_handle"]
-                ):
-                    continue
-                self.wait()
-                result = self.twitter.favorites.create(_id=tweet["id"])
-                self.logger.info("Favourite: %s" % (result["text"].encode("utf-8")))
-            # when you have already favorited a tweet, this error is thrown
-            except Exception as api_error:
-                # quit on rate limit errors
-                self.logger.error("%s" % str(api_error))
-
-    def auto_rt_by_hashtag(self, phrase, count=100, result_type="recent"):
-        """
-        Retweets tweets that match a phrase (hashtag, word, etc.).
-        """
-
-        result = self.search_tweets(phrase, count, result_type)
-        for tweet in result["statuses"]:
-            try:
-                # don't retweet your own tweets
-                if (
-                    tweet["user"]["screen_name"]
-                    == self.default_settings["twitter_handle"]
-                ):
-                    continue
-                self.wait()
-                result = self.twitter.statuses.retweet(id=tweet["id"])
-                self.logger.info("Retweeted: %s" % (result["text"].encode("utf-8")))
-            # when you have already retweeted a tweet, this error is thrown
-            except Exception as api_error:
-                # quit on rate limit errors
-                self.logger.error("Error: %s" % (str(api_error)))
-
     def auto_follow_by_hashtag(
         self,
         phrase: str,
@@ -398,7 +354,7 @@ class TwitterBot:
     def auto_follow_followers_of_user(self, user_twitter_handle):
         """Follows the followers of a specified user."""
         followers_of_user = set(
-            self.twitter.followers.ids(screen_name=user_twitter_handle)["ids"]
+            self.twitter.followers_ids(screen_name=user_twitter_handle)
         )
         followers_of_user = list(followers_of_user)
         for i in range(0, len(followers_of_user), 99):
