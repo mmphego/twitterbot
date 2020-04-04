@@ -63,6 +63,12 @@ def file_last_mod(file: str) -> int:
     return pathlib.os.path.getmtime(file)
 
 
+def divide_chunks(l: list, n: int) -> list:
+    # looping till length l
+    for i in range(0, len(l), n):
+        yield l[i : i + n]
+
+
 class TwitterBot:
     """
     Bot that automates several actions on Twitter, such as following users and favoriting tweets.
@@ -240,20 +246,27 @@ class TwitterBot:
         with open(filename, "a") as out_file:
             out_file.write(f"{user_obj.id}\n")
 
-    def unfollow_user(self, user_id: int, unfollow_verified: bool = False):
+    def unfollow_user(
+        self,
+        user_obj: object,
+        unfollow_verified: bool = False,
+        unfollow_protected: bool = False,
+    ):
         """Allows the user to unfollow the user specified in the ID parameter."""
         try:
-            results = self.username_lookup(user_id)
-            for result in results:
-                if result.verified != unfollow_verified:
-                    self.logger.warning(
-                        f"@{result.screen_name} is verified, therefore will not unfollow."
-                    )
-                    return
-
-            self.wait()
-            result = self.twitter.destroy_friendship(user_id=user_id)
-            self.logger.info(f"Unfollowed @{self.user_stats(result)}")
+            if user_obj.verified != unfollow_verified:
+                self.logger.warning(
+                    f"@{result.screen_name} is verified, therefore will not unfollow."
+                )
+                self.ignore_user(user_obj)
+                return
+            elif user_obj.protected != unfollow_protected:
+                self.ignore_user(user_obj)
+                return
+            else:
+                self.wait()
+                result = self.twitter.destroy_friendship(user_id=user_obj.id)
+                self.logger.info(f"Unfollowed @{self.user_stats(result)}")
         except Exception:
             self.logger.exception("Error occurred, investigate")
 
@@ -266,7 +279,7 @@ class TwitterBot:
     # ----------------------------------
     def get_do_not_follow_list(self) -> set:
         """Returns the set of users the bot has already followed in the past."""
-        self.logger.info("Getting all users I have already followed in the past.")
+        self.logger.debug("Getting all users I have already followed in the past.")
         dnf_list = set()
         with open(self.default_settings["already_followed_file"], "r") as in_file:
             dnf_list.update(int(line) for line in in_file)
@@ -278,7 +291,7 @@ class TwitterBot:
 
     def get_followers_list(self) -> set:
         """Returns the set of users that are currently following the user."""
-        self.logger.info("Getting all followers.")
+        self.logger.debug("Getting all followers.")
         followers_list = set()
         with open(self.default_settings["followers_file"], "r") as in_file:
             followers_list.update(int(line) for line in in_file)
@@ -286,7 +299,7 @@ class TwitterBot:
 
     def get_follows_list(self) -> set:
         """Returns the set of users that the user is currently following."""
-        self.logger.info("Getting all users I follow")
+        self.logger.debug("Getting all users I follow")
         follows_list = set()
         with open(self.default_settings["follows_file"], "r") as in_file:
             follows_list.update(int(line) for line in in_file)
@@ -368,27 +381,26 @@ class TwitterBot:
         self, auto_sync: bool, unfollow_verified: bool,
     ):
         """Unfollows everyone who hasn't followed you back."""
-        if auto_sync:
-            self.sync_follows()
+        # if auto_sync:
+        # self.sync_follows()
         following = self.get_follows_list()
         followers = self.get_followers_list()
+        already_followed_list = self.get_do_not_follow_list()
+        not_following_back = list(following - followers - already_followed_list)
+        if not not_following_back:
+            return
 
-        not_following_back = list(following - followers)
         # update the "already followed" file with users who didn't follow back
-        already_followed = set(not_following_back)
-        already_followed_list = []
-        with open(self.default_settings["already_followed_file"], "r") as in_file:
-            for line in in_file:
-                already_followed_list.append(int(line))
-
-        already_followed.update(set(already_followed_list))
-
-        with open(self.default_settings["already_followed_file"], "w") as out_file:
-            for val in already_followed:
+        with open(self.default_settings["already_followed_file"], "a") as out_file:
+            for val in not_following_back:
                 out_file.write(f"{val}\n")
 
-        for user_id in sorted(not_following_back):
-            self.unfollow_user(user_id, unfollow_verified)
+        non_followers = list(divide_chunks(not_following_back, 99))
+        _non_followers = [self.username_lookup(i) for i in non_followers]
+        flat_list = [item for sublist in _non_followers for item in sublist]
+
+        for user_obj in flat_list:
+            self.unfollow_user(user_obj, unfollow_verified)
 
     # ----------------------------------
     def unfollow_list_of_users(self, users=[]):
@@ -461,6 +473,31 @@ class TwitterBot:
             self.logger.info(f"Number of deleted tweets: {count}")
 
 
+def main(args):
+    log = logger(args.get("loglevel", "INFO").upper())
+    tweeter_bot = TwitterBot(logger=log)
+
+    if args.get("sync"):
+        tweeter_bot.sync_follows()
+
+    if args.get("follow_by_hashtag"):
+        tweeter_bot.auto_follow_by_hashtag(
+            phrase=args.get("follow_by_hashtag"), auto_sync=True
+        )
+
+    if args.get("follow_back"):
+        tweeter_bot.auto_follow_followers(auto_sync=True)
+
+    if args.get("unfollow"):
+        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
+
+    if args.get("nuke_old_tweets"):
+        date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
+        tweeter_bot.nuke_old_tweets(
+            to_date=date, tweets_csv_file=args.get("nuke_old_tweets")
+        )
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -516,25 +553,7 @@ if __name__ == "__main__":
 
     args = vars(parser.parse_args())
 
-    log = logger(args.get("loglevel", "INFO").upper())
-    tweeter_bot = TwitterBot(logger=log)
-
-    if args.get("sync"):
-        tweeter_bot.sync_follows()
-
-    if args.get("follow_by_hashtag"):
-        tweeter_bot.auto_follow_by_hashtag(
-            phrase=args.get("follow_by_hashtag"), auto_sync=True
-        )
-
-    if args.get("follow_back"):
-        tweeter_bot.auto_follow_followers(auto_sync=True)
-
-    if args.get("unfollow"):
-        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
-
-    if args.get("nuke_old_tweets"):
-        date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
-        tweeter_bot.nuke_old_tweets(
-            to_date=date, tweets_csv_file=args.get("nuke_old_tweets")
-        )
+    try:
+        main(args)
+    except Exception:
+        print("Cleaning up!")
