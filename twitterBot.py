@@ -150,10 +150,7 @@ class TwitterBot:
         self.logger.info("Done syncing data with Twitter to file")
 
     def follow_user(
-        self,
-        user_obj: object,
-        n_followers: int = 100,
-        followers_follow_ratio: int = 5,
+        self, user_obj: object, n_followers: int = 100, followers_follow_ratio: int = 5,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
         ff_ratio = user_obj.user.friends_count / float(user_obj.user.followers_count)
@@ -183,6 +180,7 @@ class TwitterBot:
 
     @staticmethod
     def user_stats(user: object):
+        """String formatter."""
         result = ""
         if hasattr(user, "screen_name"):
             result += f"{user.screen_name}, "
@@ -215,18 +213,8 @@ class TwitterBot:
         except Exception:
             self.logger.exception("Error occurred, investigate")
 
-    def who_am_i(self):
-        self.logger.info("Username is %s" % self.default_settings["twitter_handle"])
-        return self.default_settings["twitter_handle"]
-
     def username_lookup(self, user_id):
-        """
-        Find username by id
-        Params: int
-            user id
-        Return: dict
-            Dict with Users information
-        """
+        """Find username by id."""
         return self.twitter.lookup_users(
             user_ids=user_id if isinstance(user_id, list) else [user_id]
         )
@@ -255,43 +243,6 @@ class TwitterBot:
         with open(self.default_settings["follows_file"], "r") as in_file:
             follows_list.update(int(line) for line in in_file)
         return follows_list
-
-    def get_all_nonfollowers(self, get_name=False, auto_sync=False):
-        """
-        find everyone who hasn't followed you back.
-        """
-        self.logger.info("Getting everyone who hasn't followed you back.")
-        if auto_sync:
-            self.sync_follows()
-
-        following = self.get_follows_list()
-        followers = self.get_followers_list()
-        self.logger.info(f"Followers: {len(followers)}, Following: {len(following)}")
-        not_following_back = list(following - followers)
-        non_followers = []
-        _non_followers = []
-        for n in range(0, len(not_following_back), 99):
-            ids = not_following_back[n : n + 99]
-            _non_followers.append(ids)
-            if get_name:
-                subquery = self.username_lookup(ids)
-                for user in subquery:
-                    non_followers.append(
-                        "[%s] @%s [id: %s]"
-                        % (
-                            "*" if user["verified"] else " ",
-                            user["screen_name"],
-                            user["id"],
-                        )
-                    )
-
-        with open(self.default_settings["non_followers_file"], "w") as out_file:
-            if non_followers:
-                for val in non_followers:
-                    out_file.write(str(val) + "\n")
-            else:
-                for val in _non_followers:
-                    out_file.write(str(val) + "\n")
 
     # ----------------------------------
     def search_tweets(self, phrase, count=100, result_type="recent"):
