@@ -131,10 +131,6 @@ class TwitterBot:
         Do not run this method too often, however, or it will quickly cause your
         bot to get rate limited by the Twitter API.
         """
-        last_mod = file_last_mod(self.default_settings["followers_file"])
-        if time.time() - last_mod < 100:
-            return
-
         self.logger.info("Sync the user's followers (accounts following the user).")
         followers_ids = self.twitter.followers_ids()
         with open(self.default_settings["followers_file"], "w") as out_file:
@@ -166,11 +162,14 @@ class TwitterBot:
         if not hasattr(user_obj, "screen_name"):
             user_obj = user_obj.user
 
+        if self.ignore_user(user_obj, check_user=True):
+            return
+
         try:
             ff_ratio = user_obj.friends_count / float(user_obj.followers_count)
         except Exception:
             return
-        import IPython; globals().update(locals()); IPython.embed(header='Python Debugger')
+
         inv_followers_follow_ratio = 1 / followers_follow_ratio * 10
         try:
             if user_obj.followers_count < n_followers:
@@ -230,8 +229,16 @@ class TwitterBot:
 
         return result
 
-    def ignore_user(self, user_obj:object):
-        pass
+    def ignore_user(self, user_obj: object, check_user: bool = False):
+        """Write all users to file, that are likely spammers, protected, ghost users."""
+        filename = self.default_settings["non_following_file"]
+        if check_user:
+            with open(filename) as out_file:
+                ids = [i.strip() for i in out_file.readlines()]
+            return str(user_obj.id) in ids
+
+        with open(filename, "a") as out_file:
+            out_file.write(f"{user_obj.id}\n")
 
     def unfollow_user(self, user_id: int, unfollow_verified: bool = False):
         """Allows the user to unfollow the user specified in the ID parameter."""
@@ -321,11 +328,8 @@ class TwitterBot:
 
         self.logger.info(f"Following {len(statuses)} users.")
         for tweet in statuses:
-            try:
+            if not self.ignore_user(user_obj, check_user=True):
                 self.follow_user(tweet)
-            except Exception as exc:
-                # quit on rate limit errors
-                self.logger.error(f"Error: {str(exc)}")
 
     def auto_follow_followers(self, auto_sync=False):
         """Follows back everyone who's followed you."""

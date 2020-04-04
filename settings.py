@@ -23,6 +23,9 @@ class ConfigSettings:
                 "non_followers_file": self.filename.parent.joinpath(
                     "non-followers.txt"
                 ),
+                "non_following_file": self.filename.parent.joinpath(
+                    "non-following.txt"
+                ),
             }
         )
         self.check_if_exists()
@@ -58,8 +61,8 @@ class ConfigSettings:
         txt_files = list(self.filename.parent.glob("*.txt"))
         for key in self.default_settings:
             if (
-                ".txt" in self.default_settings[key]
-                and self.default_settings[key] not in txt_files
+                ".txt" in str(self.default_settings[key])
+                and str(self.default_settings[key]) not in txt_files
             ):
                 try:
                     self.default_settings[key].touch()
