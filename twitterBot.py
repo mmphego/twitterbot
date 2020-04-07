@@ -161,7 +161,7 @@ class TwitterBot:
         self,
         user_obj: object,
         n_followers: int = 100,
-        followers_follow_ratio: int = 5,
+        followers_follow_ratio: int = 2,
         n_tweets: int = 100,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
@@ -212,8 +212,8 @@ class TwitterBot:
                 self.logger.info(f"Followed @{self.user_stats(user_obj)}")
                 self.wait()
                 result = self.twitter.create_friendship(user_id=user_obj.id)
-        except Exception:
-            self.logger.exception("Error occurred investigate")
+        except Exception as error:
+            self.logger.error(str(error))
         else:
             return result
 
