@@ -161,7 +161,7 @@ class TwitterBot:
         self,
         user_obj: object,
         n_followers: int = 100,
-        followers_follow_ratio: int = 2,
+        followers_follow_ratio: tuple = (0.7, 1.4),
         n_tweets: int = 100,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
@@ -172,23 +172,22 @@ class TwitterBot:
             return
 
         try:
-            ff_ratio = user_obj.friends_count / float(user_obj.followers_count)
+            ff_ratio = user_obj.followers_count / user_obj.friends_count
+
+            if not (followers_follow_ratio[0] <= ff_ratio <= followers_follow_ratio[1]):
+                self.logger.warning(
+                    f"Non-follow back user: {self.user_stats(user_obj)}"
+                )
+                self.ignore_user(user_obj)
+                return
         except Exception:
             return
 
-        inv_followers_follow_ratio = 1 / followers_follow_ratio * 10
         try:
             if user_obj.followers_count < n_followers:
                 self.logger.warning(
                     f"User: {user_obj.screen_name!r} has less than "
                     f"{n_followers} followers, might be spam!"
-                )
-                self.ignore_user(user_obj)
-                return
-
-            elif inv_followers_follow_ratio <= ff_ratio >= followers_follow_ratio:
-                self.logger.warning(
-                    f"Non-follow back user: {self.user_stats(user_obj)}"
                 )
                 self.ignore_user(user_obj)
                 return
@@ -228,7 +227,7 @@ class TwitterBot:
         if hasattr(user, "friends_count"):
             result += f"Following: {user.friends_count}, "
         if hasattr(user, "friends_count") and hasattr(user, "followers_count"):
-            ff_ratio = user.friends_count / float(user.followers_count)
+            ff_ratio = user.followers_count / user.friends_count
             result += f"FF_Ratio: {ff_ratio}, "
         if hasattr(user, "id"):
             result += f"[id: {user.id}]"
