@@ -348,7 +348,7 @@ class TwitterBot:
 
         self.logger.info(f"Following {len(statuses)} users.")
         for tweet in statuses:
-            if not self.ignore_user(user_obj, check_user=True):
+            if not self.ignore_user(tweet, check_user=True):
                 self.follow_user(tweet)
 
     def auto_follow_followers(self, auto_sync=False):
@@ -476,31 +476,6 @@ class TwitterBot:
             self.logger.info(f"Number of deleted tweets: {count}")
 
 
-def main(args):
-    log = logger(args.get("loglevel", "INFO").upper())
-    tweeter_bot = TwitterBot(logger=log)
-
-    if args.get("sync"):
-        tweeter_bot.sync_follows()
-
-    if args.get("follow_by_hashtag"):
-        tweeter_bot.auto_follow_by_hashtag(
-            phrase=args.get("follow_by_hashtag"), auto_sync=True
-        )
-
-    if args.get("follow_back"):
-        tweeter_bot.auto_follow_followers(auto_sync=True)
-
-    if args.get("unfollow"):
-        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
-
-    if args.get("nuke_old_tweets"):
-        date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
-        tweeter_bot.nuke_old_tweets(
-            to_date=date, tweets_csv_file=args.get("nuke_old_tweets")
-        )
-
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -509,7 +484,6 @@ if __name__ == "__main__":
             "Twitter, such as following and unfollowing users."
         )
     )
-
     parser.add_argument(
         "--sync",
         action="store_true",
@@ -553,10 +527,32 @@ if __name__ == "__main__":
         type=str,
         help="log level to use, default INFO, options INFO, DEBUG, ERROR",
     )
+    if len(sys.argv) < 2:
+        parser.print_help()
+        sys.exit(1)
 
-    args = vars(parser.parse_args())
+    parsed_args = parser.parse_args()
+    args = vars(parsed_args)
 
-    try:
-        main(args)
-    except Exception:
-        print("Cleaning up!")
+    log = logger(args.get("loglevel", "INFO").upper())
+    tweeter_bot = TwitterBot(logger=log)
+
+    if args.get("sync"):
+        tweeter_bot.sync_follows()
+
+    if args.get("follow_by_hashtag"):
+        tweeter_bot.auto_follow_by_hashtag(
+            phrase=args.get("follow_by_hashtag"), auto_sync=True
+        )
+
+    if args.get("follow_back"):
+        tweeter_bot.auto_follow_followers(auto_sync=True)
+
+    if args.get("unfollow"):
+        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
+
+    if args.get("nuke_old_tweets"):
+        date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
+        tweeter_bot.nuke_old_tweets(
+            to_date=date, tweets_csv_file=args.get("nuke_old_tweets")
+        )
