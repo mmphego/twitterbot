@@ -400,7 +400,7 @@ class TwitterBot:
         non_followers = list(divide_chunks(not_following_back, 99))
         _non_followers = [self.username_lookup(i) for i in non_followers]
         flat_list = [item for sublist in _non_followers for item in sublist]
-
+        self.logger.info(f"Un-following {len(flat_list)} users.")
         for user_obj in flat_list:
             self.unfollow_user(user_obj, unfollow_verified)
 
