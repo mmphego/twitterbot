@@ -161,14 +161,14 @@ class TwitterBot:
         self,
         user_obj: object,
         n_followers: int = 100,
-        followers_follow_ratio: tuple = (0.7, 1.4),
+        followers_follow_ratio: tuple = (0.6, 1.4),
         n_tweets: int = 100,
     ) -> None:
         """Allows the user to follow the user specified in the ID parameter."""
         if not hasattr(user_obj, "screen_name"):
             user_obj = user_obj.user
 
-        if self.ignore_user(user_obj, check_user=True):
+        if self.ignore_user(user_obj, check_user=True) or user_obj.screen_name == self.default_settings.get("TWITTER_HANDLE"):
             return
 
         try:
@@ -212,6 +212,7 @@ class TwitterBot:
                 self.wait()
                 result = self.twitter.create_friendship(user_id=user_obj.id)
         except Exception as error:
+            self.ignore_user(user_obj)
             self.logger.error(str(error))
         else:
             return result
@@ -227,8 +228,11 @@ class TwitterBot:
         if hasattr(user, "friends_count"):
             result += f"Following: {user.friends_count}, "
         if hasattr(user, "friends_count") and hasattr(user, "followers_count"):
-            ff_ratio = user.followers_count / user.friends_count
-            result += f"FF_Ratio: {ff_ratio}, "
+            try:
+                ff_ratio = user.followers_count / user.friends_count
+            except ZeroDivisionError:
+                ff_ratio = 0
+            result += f"FF_Ratio: {ff_ratio:.2f}, "
         if hasattr(user, "id"):
             result += f"[id: {user.id}]"
 
@@ -255,7 +259,7 @@ class TwitterBot:
         try:
             if user_obj.verified != unfollow_verified:
                 self.logger.warning(
-                    f"@{result.screen_name} is verified, therefore will not unfollow."
+                    f"@{user_obj.screen_name} is verified, therefore will not unfollow."
                 )
                 self.ignore_user(user_obj)
                 return
@@ -269,8 +273,8 @@ class TwitterBot:
                 self.wait()
                 result = self.twitter.destroy_friendship(user_id=user_obj.id)
                 self.logger.info(f"Unfollowed @{self.user_stats(result)}")
-        except Exception:
-            self.logger.exception("Error occurred, investigate")
+        except Exception as error:
+            self.logger.error(str(error))
 
     def username_lookup(self, user_id):
         """Find username by id."""
