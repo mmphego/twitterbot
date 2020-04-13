@@ -501,7 +501,7 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
-        "--no-sync", action="store_false", default=False, help="Do not resync."
+        "--no-sync", action="store_false", default=True, help="Do not resync."
     )
     parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
