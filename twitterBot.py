@@ -216,6 +216,8 @@ class TwitterBot:
         except Exception as error:
             self.ignore_user(user_obj)
             self.logger.error(str(error))
+            if "You are unable to follow more people at this time." in str(error):
+                raise RuntimeError(str(error))
         else:
             return result
 
