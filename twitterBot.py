@@ -168,7 +168,9 @@ class TwitterBot:
         if not hasattr(user_obj, "screen_name"):
             user_obj = user_obj.user
 
-        if self.ignore_user(user_obj, check_user=True) or user_obj.screen_name == self.default_settings.get("TWITTER_HANDLE"):
+        if self.ignore_user(
+            user_obj, check_user=True
+        ) or user_obj.screen_name == self.default_settings.get("TWITTER_HANDLE"):
             return
 
         try:
@@ -499,6 +501,9 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
+        "--no-sync", action="store_false", default=False, help="Do not resync."
+    )
+    parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
     )
     parser.add_argument(
@@ -545,14 +550,16 @@ if __name__ == "__main__":
 
     if args.get("follow_by_hashtag"):
         tweeter_bot.auto_follow_by_hashtag(
-            phrase=args.get("follow_by_hashtag"), auto_sync=True
+            phrase=args.get("follow_by_hashtag"), auto_sync=args.get("no_sync")
         )
 
     if args.get("follow_back"):
-        tweeter_bot.auto_follow_followers(auto_sync=True)
+        tweeter_bot.auto_follow_followers(auto_sync=args.get("no_sync"))
 
     if args.get("unfollow"):
-        tweeter_bot.auto_unfollow_nonfollowers(auto_sync=True, unfollow_verified=False)
+        tweeter_bot.auto_unfollow_nonfollowers(
+            auto_sync=args.get("no_sync"), unfollow_verified=False
+        )
 
     if args.get("nuke_old_tweets"):
         date = input("Enter date to start deleting tweets from!!!\n[YYYY-MM-DD] >> ")
