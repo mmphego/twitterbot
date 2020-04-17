@@ -27,6 +27,7 @@ import pathlib
 
 import tweepy
 
+from argparse import RawTextHelpFormatter
 from collections import defaultdict
 from dateutil.parser import parse
 
@@ -431,7 +432,8 @@ class TwitterBot:
     def send_tweet(self, message: str) -> object:
         """Posts a tweet."""
         try:
-            self.twitter.update_status(status=message)
+            resp = self.twitter.update_status(status=message)
+            assert time.time() - resp.created_at.timestamp() < 2
             print("Tweeted successfully!")
         except Exception:
             print("Failed to send tweet!")
@@ -439,7 +441,8 @@ class TwitterBot:
     def send_tweet_with_image(self, image_path: str, message: str) -> object:
         """posts a tweet with an image."""
         try:
-            self.twitter.update_with_media(filename=image_path, status=message)
+            resp = self.twitter.update_with_media(filename=image_path, status=message)
+            assert time.time() - resp.created_at.timestamp() < 2
             print("Tweeted successfully!")
         except Exception:
             print("Failed to send tweet!")
@@ -500,19 +503,20 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description=(
-            "A Python bot that automates several actions on "
-            "Twitter, such as following and unfollowing users."
-        )
+            "A Python bot that automates several actions on Twitter, such as following \n"
+            "and unfollowing users."
+        ),
+        formatter_class=RawTextHelpFormatter,
     )
     parser.add_argument(
         "--sync",
         action="store_true",
         default=False,
         help=(
-            "Syncing your Twitter following locally. Due to Twitter API rate limiting, "
-            "the bot must maintain a local cache of all of your followers so it doesn't "
-            "use all of your API time looking up your followers. "
-            "It is highly recommended to sync the bot's local cache daily"
+            "Syncing your Twitter following locally. Due to Twitter API rate limiting, \n"
+            "the bot must maintain a local cache of all of your followers so it doesn't\n"
+            "use all of your API time looking up your followers.\n"
+            "It is highly recommended to sync the bot's local cache daily\n"
         ),
     )
     parser.add_argument(
@@ -527,7 +531,7 @@ if __name__ == "__main__":
         nargs="+",
         type=str,
         action="store",
-        help="message to post with image path. Usage: `image path` `message`",
+        help="message to post with image path. \n\tUsage: '`image path`' '`message`'",
     )
     parser.add_argument("--dev", action="store_true", default=False, help="Dev User.")
     parser.add_argument(
@@ -551,9 +555,9 @@ if __name__ == "__main__":
         help=(
             "Delete old tweets, you will be prompted for a date of which tweets will be "
             "deleted from. Add your csv path as argument.\n"
-            "Note: You need to download your Twitter archive csv file, "
-            "which can be downloaded here: https://twitter.com/settings/account "
-            "follow the instructions to download."
+            "Note: \tYou need to download your Twitter archive csv file, \n"
+            "\twhich can be downloaded here: https://twitter.com/settings/account \n"
+            "\tfollow the instructions to download.\n"
         ),
     )
     parser.add_argument(
@@ -588,6 +592,8 @@ if __name__ == "__main__":
             )
             if pathlib.Path(image_path).is_file():
                 tweet_image.remove(image_path)
+                image_path = pathlib.Path(image_path).absolute().as_posix()
+
             msg = " ".join(tweet_image)
             if args.get("dev"):
                 msg += "\n\n#100DaysOfCode #Code"
