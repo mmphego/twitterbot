@@ -430,11 +430,13 @@ class TwitterBot:
     # ----------------------------------
     def send_tweet(self, message: str) -> object:
         """Posts a tweet."""
-        return self.twitter.update_status(status=message)
+        self.twitter.update_status(status=message)
+        return "Tweeted successfully!"
 
     def send_tweet_with_image(self, image_path: str, message: str) -> object:
         """posts a tweet with an image."""
-        return self.twitter.update_with_media(filename=image_path, status=message)
+        self.twitter.update_with_media(filename=image_path, status=message)
+        return "Tweeted successfully!"
 
     def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
@@ -519,7 +521,7 @@ if __name__ == "__main__":
         nargs="+",
         type=str,
         action="store",
-        help="message to post with image path.",
+        help="message to post with image path. Usage: `image path` `message`",
     )
     parser.add_argument("--dev", action="store_true", default=False, help="Dev User.")
     parser.add_argument(
@@ -589,7 +591,7 @@ if __name__ == "__main__":
             if args.get("dev"):
                 msg += "\n\n#100DaysOfCode #Code"
             tweeter_bot.send_tweet(msg)
-            
+
     if args.get("follow_by_hashtag"):
         tweeter_bot.auto_follow_by_hashtag(
             phrase=args.get("follow_by_hashtag"), auto_sync=args.get("no_sync")
