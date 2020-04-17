@@ -74,10 +74,10 @@ class TwitterBot:
     Bot that automates several actions on Twitter, such as following users and favoriting tweets.
     """
 
-    def __init__(self, logger=_loguru_logger):
+    def __init__(self, logger=_loguru_logger, dev=False):
         self.logger = logger
         # this variable contains the configuration for the bot
-        self.default_settings = self.initialize_bot()
+        self.default_settings = self.initialize_bot(dev)
         # this variable contains the authorized connection to the Twitter API
         self._twitter = None
 
@@ -117,13 +117,13 @@ class TwitterBot:
             time.sleep(wait_time)
         return wait_time
 
-    def initialize_bot(self, config_dir=".tweeterbot") -> dict:
+    def initialize_bot(self, dev=False, config_dir=".tweeterbot") -> dict:
         self.logger.debug("Initializing TweeterBot...")
         config_path = pathlib.Path.home().joinpath(config_dir)
         if not config_path.exists():
             config_path.mkdir()
         filename = config_path.joinpath("config.ini")
-        settings = ConfigSettings(filename, self.logger)
+        settings = ConfigSettings(filename, self.logger, dev=False)
         return settings.default_settings
 
     def sync_follows(self):
@@ -430,7 +430,7 @@ class TwitterBot:
     # ----------------------------------
     def send_tweet(self, message: str) -> object:
         """Posts a tweet."""
-        return self.twitter.statuses.update(status=message)
+        return self.twitter.update_status(status=message)
 
     def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
@@ -444,6 +444,7 @@ class TwitterBot:
         tweet_csv_file: csv
             location where the file is stored
         """
+        global count
         self.logger.info(f"Deleting old tweets from {to_date}!!!")
         _deleted = False
         if tweets_csv_file is None:
@@ -472,12 +473,12 @@ class TwitterBot:
             if to_date != "" and tweet_timestamp < parse(to_date).date():
                 try:
                     self.wait()
-                    _state = self.twitter.statuses.destroy(id=tweet_id)
+                    _state = self.twitter.destroy_status(id=tweet_id)
                     row = row.get("text", "").replace("\n", "")
                     self.logger.info(f"Deleted tweet: {tweet_timestamp}: {row}")
                     deleted_tweets.append(_state)
                 except Exception as err:
-                    self.logger.error("%s" % (str(err.response_data)))
+                    self.logger.error("%s" % (str(err)))
 
         if deleted_tweets:
             self.logger.info(f"Number of deleted tweets: {count}")
@@ -505,6 +506,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--no-sync", action="store_false", default=True, help="Do not resync."
     )
+    parser.add_argument(
+        "--tweet", "-t", nargs="+", type=str, action="store", help="message to post."
+    )
+    parser.add_argument("--dev", action="store_true", default=False, help="Dev User.")
     parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
     )
@@ -545,11 +550,21 @@ if __name__ == "__main__":
     args = vars(parsed_args)
 
     log = logger(args.get("loglevel", "INFO").upper())
-    tweeter_bot = TwitterBot(logger=log)
+
+    tweeter_bot = (
+        TwitterBot(logger=log)
+        if not args.get("dev")
+        else TwitterBot(logger=log, dev=True)
+    )
 
     if args.get("sync"):
         tweeter_bot.sync_follows()
 
+    if args.get("tweet"):
+        msg = " ".join(args.get("tweet"))
+        if args.get("dev"):
+            msg += "\n\n#100DaysOfCode #Code"
+        tweeter_bot.send_tweet(msg)
     if args.get("follow_by_hashtag"):
         tweeter_bot.auto_follow_by_hashtag(
             phrase=args.get("follow_by_hashtag"), auto_sync=args.get("no_sync")

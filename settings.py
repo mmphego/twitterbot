@@ -6,9 +6,10 @@ from loguru import logger
 
 
 class ConfigSettings:
-    def __init__(self, filename, Logger=logger):
+    def __init__(self, filename, Logger=logger, dev=False):
         self.filename = filename
         self.logger = Logger
+        self.dev = dev
         self.default_settings = OrderedDict(
             {
                 "api_key": pathlib.os.getenv("API_KEY"),
@@ -41,7 +42,9 @@ class ConfigSettings:
                 config.write(config_file)
         else:
             config.read(self.filename)
-            _default_settings = OrderedDict(config.defaults())
+            sections = config.sections()
+            _default_settings = OrderedDict(config.items(sections[0]) if self.dev else config.items(sections[1]))
+
             if _default_settings != self.default_settings:
                 # If dictionaries are not the same, merge them.
                 self.default_settings = {**self.default_settings, **_default_settings}
