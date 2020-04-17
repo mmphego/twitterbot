@@ -430,13 +430,19 @@ class TwitterBot:
     # ----------------------------------
     def send_tweet(self, message: str) -> object:
         """Posts a tweet."""
-        self.twitter.update_status(status=message)
-        return "Tweeted successfully!"
+        try:
+            self.twitter.update_status(status=message)
+            print("Tweeted successfully!")
+        except Exception:
+            print("Failed to send tweet!")
 
     def send_tweet_with_image(self, image_path: str, message: str) -> object:
         """posts a tweet with an image."""
-        self.twitter.update_with_media(filename=image_path, status=message)
-        return "Tweeted successfully!"
+        try:
+            self.twitter.update_with_media(filename=image_path, status=message)
+            print("Tweeted successfully!")
+        except Exception:
+            print("Failed to send tweet!")
 
     def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
