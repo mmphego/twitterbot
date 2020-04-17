@@ -432,6 +432,10 @@ class TwitterBot:
         """Posts a tweet."""
         return self.twitter.update_status(status=message)
 
+    def send_tweet_with_image(self, image_path: str, message: str) -> object:
+        """posts a tweet with an image."""
+        return self.twitter.update_with_media(filename=image_path, status=message)
+
     def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
         Open browser and go to https://twitter.com/settings/account
@@ -509,6 +513,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tweet", "-t", nargs="+", type=str, action="store", help="message to post."
     )
+    parser.add_argument(
+        "--tweet-image",
+        "-i",
+        nargs="+",
+        type=str,
+        action="store",
+        help="message to post with image path.",
+    )
     parser.add_argument("--dev", action="store_true", default=False, help="Dev User.")
     parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
@@ -560,11 +572,24 @@ if __name__ == "__main__":
     if args.get("sync"):
         tweeter_bot.sync_follows()
 
-    if args.get("tweet"):
-        msg = " ".join(args.get("tweet"))
-        if args.get("dev"):
-            msg += "\n\n#100DaysOfCode #Code"
-        tweeter_bot.send_tweet(msg)
+    if args.get("tweet") or args.get("tweet_image"):
+        if args.get("tweet_image"):
+            tweet_image = args.get("tweet_image")
+            image_path = "".join(
+                i for i in tweet_image if any([".jpeg" in i, ".png" in i, ".jpg" in i,])
+            )
+            if pathlib.Path(image_path).is_file():
+                tweet_image.remove(image_path)
+            msg = " ".join(tweet_image)
+            if args.get("dev"):
+                msg += "\n\n#100DaysOfCode #Code"
+            tweeter_bot.send_tweet_with_image(image_path, msg)
+        else:
+            msg = " ".join(args.get("tweet"))
+            if args.get("dev"):
+                msg += "\n\n#100DaysOfCode #Code"
+            tweeter_bot.send_tweet(msg)
+            
     if args.get("follow_by_hashtag"):
         tweeter_bot.auto_follow_by_hashtag(
             phrase=args.get("follow_by_hashtag"), auto_sync=args.get("no_sync")
