@@ -6,17 +6,17 @@ from loguru import logger
 
 
 class ConfigSettings:
-    def __init__(self, filename, Logger=logger, dev=False):
+    def __init__(self, filename=None, user=None, _logger=logger):
         self.filename = filename
-        self.logger = Logger
-        self.dev = dev
+        self.logger = _logger
+        self.user = user
         self.default_settings = OrderedDict(
             {
                 "api_key": pathlib.os.getenv("API_KEY"),
                 "api_secret": pathlib.os.getenv("API_SECRET"),
                 "access_token_key": pathlib.os.getenv("ACCESS_TOKEN_KEY"),
                 "access_token_secret": pathlib.os.getenv("ACCESS_TOKEN_SECRET"),
-                "twitter_handle": pathlib.os.getenv("TWITTER_HANDLE"),
+                "twitter_handle": user,
                 "already_followed_file": self.filename.parent.joinpath(
                     "already_followed.txt"
                 ),
@@ -42,8 +42,10 @@ class ConfigSettings:
                 config.write(config_file)
         else:
             config.read(self.filename)
-            sections = config.sections()
-            _default_settings = OrderedDict(config.items(sections[0]) if self.dev else config.items(sections[1]))
+            sections_lower = [i.lower() for i in config.sections()]
+            _default_settings = OrderedDict(
+                config.items(config.sections()[sections_lower.index(self.user)])
+            )
 
             if _default_settings != self.default_settings:
                 # If dictionaries are not the same, merge them.

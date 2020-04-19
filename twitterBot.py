@@ -75,10 +75,10 @@ class TwitterBot:
     Bot that automates several actions on Twitter, such as following users and favoriting tweets.
     """
 
-    def __init__(self, logger=_loguru_logger, dev=False):
+    def __init__(self, logger=_loguru_logger, user=""):
         self.logger = logger
         # this variable contains the configuration for the bot
-        self.default_settings = self.initialize_bot(dev)
+        self.default_settings = self.initialize_bot(user=user)
         # this variable contains the authorized connection to the Twitter API
         self._twitter = None
 
@@ -118,13 +118,13 @@ class TwitterBot:
             time.sleep(wait_time)
         return wait_time
 
-    def initialize_bot(self, dev=False, config_dir=".tweeterbot") -> dict:
+    def initialize_bot(self, config_dir=".tweeterbot", user=None) -> dict:
         self.logger.debug("Initializing TweeterBot...")
         config_path = pathlib.Path.home().joinpath(config_dir)
         if not config_path.exists():
             config_path.mkdir()
         filename = config_path.joinpath("config.ini")
-        settings = ConfigSettings(filename, self.logger, dev=False)
+        settings = ConfigSettings(filename=filename, user=user, _logger=self.logger)
         return settings.default_settings
 
     def sync_follows(self):
@@ -533,7 +533,9 @@ if __name__ == "__main__":
         action="store",
         help="message to post with image path. \n\tUsage: '`image path`' '`message`'",
     )
-    parser.add_argument("--dev", action="store_true", default=False, help="Dev User.")
+    parser.add_argument(
+        "--username", type=str, action="store", help="Twitter username."
+    )
     parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
     )
@@ -574,12 +576,7 @@ if __name__ == "__main__":
     args = vars(parsed_args)
 
     log = logger(args.get("loglevel", "INFO").upper())
-
-    tweeter_bot = (
-        TwitterBot(logger=log)
-        if not args.get("dev")
-        else TwitterBot(logger=log, dev=True)
-    )
+    tweeter_bot = TwitterBot(logger=log, user=args.get("username"))
 
     if args.get("sync"):
         tweeter_bot.sync_follows()
@@ -595,12 +592,12 @@ if __name__ == "__main__":
                 image_path = pathlib.Path(image_path).absolute().as_posix()
 
             msg = " ".join(tweet_image)
-            if args.get("dev"):
+            if "day" in msg.lower():
                 msg += "\n\n#100DaysOfCode #Code"
             tweeter_bot.send_tweet_with_image(image_path, msg)
         else:
             msg = " ".join(args.get("tweet"))
-            if args.get("dev"):
+            if "day" in msg.lower():
                 msg += "\n\n#100DaysOfCode #Code"
             tweeter_bot.send_tweet(msg)
 
