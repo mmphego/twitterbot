@@ -436,7 +436,7 @@ class TwitterBot:
         """Posts a tweet."""
         try:
             resp = self.twitter.update_status(status=message)
-            assert time.time() - resp.created_at.timestamp() < 2
+            assert time.time() - resp.created_at.timestamp() > 2
             print("Tweeted successfully!")
         except Exception:
             print("Failed to send tweet!")
