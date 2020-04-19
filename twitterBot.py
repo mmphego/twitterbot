@@ -537,7 +537,12 @@ if __name__ == "__main__":
         help="message to post with image path. \n\tUsage: '`image path`' '`message`'",
     )
     parser.add_argument(
-        "--username", type=str, required=True, action="store", help="Twitter username."
+        "--username",
+        "-u",
+        type=str,
+        required=True,
+        action="store",
+        help="Twitter username.",
     )
     parser.add_argument(
         "--follow-by-hashtag", action="store", help="Follow users by hashtag.",
