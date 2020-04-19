@@ -138,7 +138,10 @@ class TwitterBot:
         Do not run this method too often, however, or it will quickly cause your
         bot to get rate limited by the Twitter API.
         """
-        self.logger.info("Sync the user's followers (accounts following the user).")
+        self.logger.info(
+            f"Syncing {self.default_settings['twitter_handle']!r} "
+            "account followers and followings."
+        )
         followers_ids = self.twitter.followers_ids()
         with open(self.default_settings["followers_file"], "w") as out_file:
             self.logger.debug(
