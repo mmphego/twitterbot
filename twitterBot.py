@@ -395,8 +395,8 @@ class TwitterBot:
         self, auto_sync: bool, unfollow_verified: bool,
     ):
         """Unfollows everyone who hasn't followed you back."""
-        # if auto_sync:
-        # self.sync_follows()
+        if auto_sync:
+            self.sync_follows()
         following = self.get_follows_list()
         followers = self.get_followers_list()
         already_followed_list = self.get_do_not_follow_list()
@@ -435,20 +435,23 @@ class TwitterBot:
     def send_tweet(self, message: str) -> object:
         """Posts a tweet."""
         try:
+            assert (
+                len(message) <= 280
+            ), f"Tweet should be shorter, actual len: {len(message)}"
             resp = self.twitter.update_status(status=message)
             assert time.time() - resp.created_at.timestamp() > 2
-            print("Tweeted successfully!")
-        except Exception:
-            print("Failed to send tweet!")
+            self.logger.info("Tweeted successfully!")
+        except Exception as err:
+            self.logger.error(f"Failed to send tweet!: {str(err)}")
 
     def send_tweet_with_image(self, image_path: str, message: str) -> object:
         """posts a tweet with an image."""
         try:
             resp = self.twitter.update_with_media(filename=image_path, status=message)
             assert time.time() - resp.created_at.timestamp() < 2
-            print("Tweeted successfully!")
+            self.logger.info("Tweeted successfully!")
         except Exception:
-            print("Failed to send tweet!")
+            self.logger.error("Failed to send tweet!")
 
     def nuke_old_tweets(self, to_date="2000-01-01", tweets_csv_file=None):
         """
@@ -601,12 +604,12 @@ if __name__ == "__main__":
 
             msg = " ".join(tweet_image)
             if "day" in msg.lower():
-                msg += "\n\n#100DaysOfCode #Code"
+                msg += "\n\n#100DaysOfCode #Code #UdacityLevelUp"
             tweeter_bot.send_tweet_with_image(image_path, msg)
         else:
             msg = " ".join(args.get("tweet"))
             if "day" in msg.lower():
-                msg += "\n\n#100DaysOfCode #Code"
+                msg += "\n\n#100DaysOfCode #Code #UdacityLevelUp"
             tweeter_bot.send_tweet(msg)
 
     if args.get("follow_by_hashtag"):
