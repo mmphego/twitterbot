@@ -246,8 +246,9 @@ class TwitterBot:
 
         return result
 
-    def ignore_user(self, user_obj: object, check_user: bool = False):
+    def ignore_user(self, user_obj: object=None, user_id: int=None, check_user: bool = False):
         """Write all users to file, that are likely spammers, protected, ghost users."""
+        # TODO: Write to database.
         filename = self.default_settings["non_following_file"]
         if check_user:
             with open(filename) as out_file:
@@ -255,7 +256,10 @@ class TwitterBot:
             return str(user_obj.id) in ids
 
         with open(filename, "a") as out_file:
-            out_file.write(f"{user_obj.id}\n")
+            try:
+                out_file.write(f"{user_obj.id}\n")
+            except Exception:
+                out_file.write(f"{user_id}\n")
 
     def unfollow_user(
         self,
@@ -286,9 +290,12 @@ class TwitterBot:
 
     def username_lookup(self, user_id):
         """Find username by id."""
-        return self.twitter.lookup_users(
-            user_ids=user_id if isinstance(user_id, list) else [user_id]
-        )
+        try:
+            return self.twitter.lookup_users(
+                user_ids=user_id if isinstance(user_id, list) else [user_id]
+            )
+        except Exception:
+            self.ignore_user(user_id=user_id if isinstance(user_id, list) else [user_id])
 
     # ----------------------------------
     def get_do_not_follow_list(self) -> set:
