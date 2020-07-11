@@ -181,9 +181,9 @@ class TwitterBot:
             ff_ratio = user_obj.followers_count / user_obj.friends_count
 
             if not (followers_follow_ratio[0] <= ff_ratio <= followers_follow_ratio[1]):
-                self.logger.warning(
-                    f"Non-follow back user: {self.user_stats(user_obj)}"
-                )
+                # self.logger.warning(
+                #     f"Non-follow back user: {self.user_stats(user_obj)}"
+                # )
                 self.ignore_user(user_obj)
                 return
         except Exception:
@@ -375,7 +375,7 @@ class TwitterBot:
             self.logger.warning("No-one to follow.")
             return
 
-        not_following_back = self.username_lookup(not_following_back)
+        not_following_back = self.username_lookup(not_following_back[:99])
         self.logger.info(f"Following {len(not_following_back)} users.")
         for i in range(0, len(not_following_back), 99):
             for user_obj in not_following_back[i : i + 99]:
