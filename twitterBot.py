@@ -375,7 +375,12 @@ class TwitterBot:
             self.logger.warning("No-one to follow.")
             return
 
-        not_following_back = self.username_lookup(not_following_back[:99])
+        try:
+            not_following_back = self.username_lookup(not_following_back[:99])
+        except Exception:
+            self.logger.exception("Could not find username.")
+            return
+
         self.logger.info(f"Following {len(not_following_back)} users.")
         for i in range(0, len(not_following_back), 99):
             for user_obj in not_following_back[i : i + 99]:
